@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=69"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,6 +7,9 @@ name = "narration-rebuild"
 version = "0.1.0"
 description = "Rebuild a video's voiceover: transcribe, clean, re-synthesize in a cloned voice, remux."
 readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "James Hickman" }]
 requires-python = ">=3.11"
 dependencies = [
     "httpx>=0.27",

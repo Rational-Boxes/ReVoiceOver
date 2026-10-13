@@ -104,7 +104,7 @@ def build_toolbar(frame: wx.Frame, ids: Ids) -> wx.ToolBar:
 
 
 def show_about(parent: wx.Window) -> None:
-    from narration import __version__
+    from narration import LICENSE_NOTICE, __copyright__, __version__
 
     info = wx.adv.AboutDialogInfo()
     info.SetName("ReVoiceOver")
@@ -112,6 +112,9 @@ def show_about(parent: wx.Window) -> None:
     info.SetDescription("Rebuild a video's narration: transcribe, clean the script, "
                         "re-voice it in a cloned voice, and remux.")
     info.SetIcon(icons.app_icon().GetIcon(wx.Size(64, 64)))
+    info.SetCopyright(__copyright__)
+    info.SetLicence(LICENSE_NOTICE)
+    info.SetWebSite("https://github.com/Rational-Boxes/ReVoiceOver")
     wx.adv.AboutBox(info, parent)
 
 
