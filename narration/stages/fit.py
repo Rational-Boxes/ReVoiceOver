@@ -3,17 +3,24 @@
 ``anchor`` timing (the default) starts each speech group exactly where the
 original speech started. A clip that is too long is first sped up (up to
 ``fit.max_atempo``); whatever still does not fit is made room for by slowing
-that slice of video down. Writes fitted/<id>.wav and timeline.json.
+that slice of video down. Noises QA found in a clip are muted first.
+Writes fitted/<id>.wav and timeline.json.
 """
 
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import Any
+
+import soundfile as sf
 
 from narration import artifacts
+from narration.cache import file_sha256
 from narration.config import Fit as FitConfig
 from narration.context import RunContext
 from narration.media import ffmpeg
+from narration.media.audio import mute, read_mono
 from narration.stages import StageNotImplemented
 from narration.stages.synth import current_clips
 from narration.types import TimelineEntry, Unit
@@ -93,6 +100,25 @@ def atempo_filter(factor: float) -> str:
     return f"atempo={factor:.4f}"
 
 
+def noise_by_group(work_dir: Path) -> dict[str, dict[str, Any]]:
+    """qa.json's noise spans (and the take they were found in), by group."""
+    try:
+        groups = artifacts.read_json(work_dir / "qa.json")["groups"]
+    except (FileNotFoundError, artifacts.SchemaError, KeyError):
+        return {}
+    return {gid: e for gid, e in groups.items() if e.get("noise")}
+
+
+def muted_source(clip: Path, noise: dict[str, Any] | None, tmp: Path) -> Path:
+    """``clip``, or a copy with QA's noise spans muted when they belong to this take
+    (a new take made after QA keeps its sound until QA runs again)."""
+    if not noise or noise.get("noise_audio") != file_sha256(clip):
+        return clip
+    samples, rate = read_mono(clip)
+    sf.write(str(tmp), mute(samples, rate, noise["noise"]), rate, subtype="PCM_16")
+    return tmp
+
+
 def run(ctx: RunContext) -> None:
     cfg = ctx.config
     if cfg.fit.timing != "anchor":
@@ -116,13 +142,17 @@ def run(ctx: RunContext) -> None:
         old.unlink()
     ctx.reporter.set_total(STAGE, len(voiced) * 2)
 
-    # Pass 1: trim the edges and measure what is left.
+    # Pass 1: mute noises, trim the edges and measure what is left.
+    noise = noise_by_group(ctx.work_dir)
     trimmed: dict[str, float] = {}
     for u in voiced:
         ctx.check_cancelled()
         tmp = out_dir / f"{u.id}.trim.wav"
-        ffmpeg.run(["-i", str(ctx.path(clips[u.id]["file"])), "-af", trim_filter(cfg.fit),
+        muted = out_dir / f"{u.id}.mute.wav"
+        src = muted_source(ctx.path(clips[u.id]["file"]), noise.get(u.id), muted)
+        ffmpeg.run(["-i", str(src), "-af", trim_filter(cfg.fit),
                     "-c:a", "pcm_s16le", str(tmp)], cancel=ctx.cancel)
+        muted.unlink(missing_ok=True)
         trimmed[u.id] = ffmpeg.probe(tmp).duration
         ctx.reporter.advance(STAGE, 1, u.id)
 

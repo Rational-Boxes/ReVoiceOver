@@ -17,6 +17,15 @@ nothing unless clips changed.</p>
 <p>It also flags clips with a <b>long silence</b> inside (over 1.5 s) or with
 <b>clipping</b> (distortion).</p>
 
+<h2><a name="noise"></a>Noises</h2>
+<p>The voice sometimes adds sounds of its own (squeaks, breaths, a stray "no" or
+"bye") before, between or after sentences. Whisper's word timings show where the
+script is spoken; anything audible outside those words is muted when the clips
+are fitted. The Log lists the clips that had noises. The original takes in
+<tt>tts/</tt> are not changed, and a <b>New Take</b> keeps its sound until the
+check runs again. Set <tt>mute_noise = false</tt> under <tt>[qa]</tt> in
+<tt>narr.toml</tt> to turn this off.</p>
+
 <h2><a name="fixing"></a>Fixing what's left</h2>
 <p>The <b>Quality</b> tab lists the clips that still fail, with what the script says
 and what Whisper heard. For each one:</p>

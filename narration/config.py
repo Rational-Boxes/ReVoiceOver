@@ -125,6 +125,12 @@ class QA(_Section):
     max_retries: int = 3
     max_silence_s: float = Field(1.5, description="longest silence allowed inside a clip")
     silence_db: float = -45.0
+    # Zonos sometimes adds noises (squeaks, breaths, mumbles) before, between or after
+    # sentences. Anything audible outside the words that match the script is muted.
+    mute_noise: bool = True
+    noise_db: float = Field(-40.0, description="quieter than this is not a noise")
+    noise_pad_before_s: float = Field(0.1, ge=0, description="kept before each word")
+    noise_pad_after_s: float = Field(0.25, ge=0, description="kept after each word")
 
 
 class Config(_Section):

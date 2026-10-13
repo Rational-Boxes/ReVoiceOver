@@ -29,7 +29,7 @@ video ─► extract ─► transcribe ─► segment ─► clean ─► [ you 
 | **review** | The run pauses so you can read and edit the script. |
 | **voice** | Picks a clean 8–15 s stretch of your speech, registers it once as a cloned voice, and remembers it. |
 | **synth** | Speaks the script with Zonos in your cloned voice, in whole-sentence speech groups so intonation flows. |
-| **qa** | Whisper listens to every clip and compares it with the script. Bad takes are retried; dropped words and acronyms are flagged. |
+| **qa** | Whisper listens to every clip and compares it with the script. Bad takes are retried; dropped words and acronyms are flagged; the voice's own noises between words are found for muting. |
 | **fit** | Fits each clip into its slot: trims silence, speeds up slightly if needed, and slows the video only as a last resort. |
 | **assemble** | Builds the narration track and muxes it onto the video. The video stream is copied when nothing was stretched. Writes subtitles. |
 

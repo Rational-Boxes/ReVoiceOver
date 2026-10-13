@@ -97,9 +97,16 @@ def make_asr(client: DeepInfraClient, model: str, *, timeout_s: float = 900.0) -
 
 
 async def transcribe_text(client: DeepInfraClient, model: str, audio: Path, *,
-                          language: str | None = None, timeout_s: float = 300.0) -> dict[str, Any]:
-    """Plain transcription (any Whisper model); the text is in ``raw["text"]``."""
+                          language: str | None = None, words: bool = False,
+                          timeout_s: float = 300.0) -> dict[str, Any]:
+    """Plain transcription (any Whisper model); the text is in ``raw["text"]``.
+
+    With ``words``, ``raw["words"]`` lists ``{"word", "start", "end"}`` too (same
+    price). Timings of words Whisper made up from noise are unreliable.
+    """
     data = {"language": language} if language else {}
+    if words:
+        data["chunk_level"] = "word"
     response = await client.request(
         "POST", f"/v1/inference/{model}",
         files={"audio": (audio.name, audio.read_bytes(), "audio/wav")},

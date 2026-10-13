@@ -3,6 +3,11 @@
 A clip whose word error rate against its script text exceeds ``qa.max_wer`` is
 re-synthesized with new seeds (up to ``qa.max_retries``); the best take wins.
 Clips that stay bad, or have long silences or clipping, are flagged for review.
+
+The voice also makes noises of its own (squeaks, breaths, a stray "no") before,
+between or after sentences. Whisper's word timings show where the script is
+spoken; whatever is audible elsewhere is recorded in qa.json as ``noise`` spans,
+which the fit stage mutes.
 """
 
 from __future__ import annotations
@@ -20,9 +25,9 @@ from narration.cache import FileCache, file_sha256, make_key
 from narration.clients.asr import transcribe_text
 from narration.clients.deepinfra import DeepInfraClient
 from narration.clients.tts import make_tts
+from narration.config import QA as QAConfig
 from narration.context import RunContext
-from narration.media import ffmpeg
-from narration.media.audio import read_mono
+from narration.media.audio import mute, read_mono
 from narration.stages.synth import Clip, Group, load_pronunciations, synthesize_group
 
 STAGE = "qa"
@@ -37,6 +42,9 @@ class Result:
     retries: int = 0
     flags: list[str] = field(default_factory=list)
     take: dict[str, Any] | None = None  # set when a retry replaced the synth take
+    # [start, end] seconds of the take to mute, and the sha256 of the take they belong to.
+    noise: list[list[float]] = field(default_factory=list)
+    noise_audio: str = ""
 
 
 def normalize_for_wer(text: str, hyphen: str = "") -> str:
@@ -82,18 +90,94 @@ def word_error_rate(expected: str, heard: str) -> float:
     return min(rates)
 
 
-def audio_flags(ctx: RunContext, clip_path: Any) -> list[str]:
-    cfg = ctx.config.qa
+FRAME_S = 0.01
+JOIN_S = 0.3  # an unscripted word this close to spoken script is part of the speech
+
+
+def frame_peaks_db(samples: np.ndarray, rate: int) -> np.ndarray:
+    """Peak level of each 10 ms frame, in dBFS."""
+    hop = max(1, int(rate * FRAME_S))
+    n = samples.size // hop
+    peaks = np.abs(samples[: n * hop]).reshape(n, hop).max(axis=1) if n else np.zeros(0)
+    return 20 * np.log10(peaks + 1e-9)
+
+
+def speech_spans(expected: str, words: list[dict[str, Any]]) -> list[tuple[float, float]]:
+    """Where the script is spoken: heard words that align with script words.
+
+    Unscripted words count only when they run on from scripted ones (Whisper
+    splits "AI-based" or "GreenCanary"). Isolated ones ("Bye.", "*Squeak*", a
+    lone "you") are the voice's noises, as are words with no letters at all.
+    """
+    ref = normalize_for_wer(expected).split()
+    tokens: list[str] = []
+    owner: list[int] = []
+    for i, w in enumerate(words):
+        for t in normalize_for_wer(str(w.get("word", ""))).split():
+            tokens.append(t)
+            owner.append(i)
+    if not ref or not tokens:
+        return []
+    kept: set[int] = set()
+    for chunk in jiwer.process_words(" ".join(ref), " ".join(tokens)).alignments[0]:
+        if chunk.type in ("equal", "substitute"):
+            kept.update(owner[j] for j in range(chunk.hyp_start_idx, chunk.hyp_end_idx))
+    voiced = set(owner)
+    order = list(range(len(words)))
+    for seq in (order, order[::-1]):  # spread forwards, then backwards
+        last: int | None = None
+        for i in seq:
+            if i in kept:
+                last = i
+            elif last is not None and i in voiced and \
+                    _gap(words[last], words[i]) <= JOIN_S:
+                kept.add(i)
+                last = i
+    return [(float(words[i]["start"]), float(words[i]["end"])) for i in sorted(kept)]
+
+
+def _gap(a: dict[str, Any], b: dict[str, Any]) -> float:
+    first, second = sorted((a, b), key=lambda w: float(w["start"]))
+    return max(0.0, float(second["start"]) - float(first["end"]))
+
+
+def noise_spans(samples: np.ndarray, rate: int, speech: list[tuple[float, float]],
+                cfg: QAConfig) -> list[tuple[float, float]]:
+    """Audible stretches outside the (padded) speech spans.
+
+    Nothing is muted when no speech was recognized: then the WER check fails
+    the clip and a person should listen.
+    """
+    if not speech or not samples.size:
+        return []
+    duration = samples.size / rate
+    db = frame_peaks_db(samples, rate)
+    gaps, t = [], 0.0
+    for start, end in sorted(speech):
+        if start - cfg.noise_pad_before_s > t:
+            gaps.append((t, start - cfg.noise_pad_before_s))
+        t = max(t, end + cfg.noise_pad_after_s)
+    if t < duration:
+        gaps.append((t, duration))
+    out = []
+    for a, b in gaps:
+        frames = db[int(a / FRAME_S):int(np.ceil(b / FRAME_S))]
+        if frames.size and float(frames.max()) > cfg.noise_db:
+            out.append((round(a, 3), round(min(b, duration), 3)))
+    return out
+
+
+def audio_flags(samples: np.ndarray, rate: int, cfg: QAConfig) -> list[str]:
     flags = []
-    samples, rate = read_mono(clip_path)
     if samples.size and float(np.mean(np.abs(samples) > 0.999)) > 0.001:
         flags.append("clipping")
-    silences = ffmpeg.detect_silences(clip_path, noise_db=cfg.silence_db,
-                                      min_s=cfg.max_silence_s)
-    duration = samples.size / rate if samples.size else 0.0
     # Leading/trailing silence is trimmed by the fit stage; only interior gaps count.
-    if any(s > 0.05 and e < duration - 0.05 for s, e in silences):
-        flags.append("silence")
+    quiet = frame_peaks_db(samples, rate) < cfg.silence_db
+    edges = np.flatnonzero(np.diff(np.concatenate(([0], quiet.astype(np.int8), [0]))))
+    for first, last in zip(edges[::2], edges[1::2], strict=True):
+        if first > 0 and last < quiet.size and (last - first) * FRAME_S >= cfg.max_silence_s:
+            flags.append("silence")
+            break
     return flags
 
 
@@ -118,15 +202,17 @@ async def run(ctx: RunContext) -> None:
     async with DeepInfraClient.from_context(ctx) as client:
         tts = make_tts(client, cfg.models.tts)
 
-        async def heard(path: Any) -> str:
+        async def heard(path: Any) -> tuple[str, list[dict[str, Any]]]:
+            """What Whisper hears in a clip, and the word timings."""
             nonlocal cost
-            key = make_key(cfg.models.asr_qa, language, file_sha256(path))
+            key = make_key(cfg.models.asr_qa, language, "words", file_sha256(path))
             raw = cache.get_json(key)
             if raw is None:
-                raw = await transcribe_text(client, cfg.models.asr_qa, path, language=language)
+                raw = await transcribe_text(client, cfg.models.asr_qa, path,
+                                            language=language, words=True)
                 cache.put_json(key, raw)
                 cost += float((raw.get("inference_status") or {}).get("cost") or 0.0)
-            return str(raw.get("text", "")).strip()
+            return str(raw.get("text", "")).strip(), list(raw.get("words") or [])
 
         async def check(gid: str, clip: Clip) -> None:
             group = groups[gid]
@@ -134,9 +220,9 @@ async def run(ctx: RunContext) -> None:
             # Start from exactly the take synth.json records (an earlier QA run may
             # have left a retry take in tts/<id>.wav). A cache hit: no API call.
             clip = await synthesize_group(ctx, tts, group, voice_id, pronunciations, clip.seed)
-            text = await heard(ctx.path(clip.file))
+            text, words = await heard(ctx.path(clip.file))
             best = Result(word_error_rate(expected, text), text)
-            best_clip = clip
+            best_clip, best_words = clip, words
             seed = clip.seed
             def bad(r: Result) -> bool:
                 return too_many_errors(expected, r.wer, cfg.qa.max_wer) \
@@ -146,11 +232,11 @@ async def run(ctx: RunContext) -> None:
                 ctx.check_cancelled()
                 seed += 1
                 take = await synthesize_group(ctx, tts, group, voice_id, pronunciations, seed)
-                text = await heard(ctx.path(take.file))
+                text, words = await heard(ctx.path(take.file))
                 wer = word_error_rate(expected, text)
                 best.retries += 1
                 if wer < best.wer:
-                    best.wer, best.heard, best_clip = wer, text, take
+                    best.wer, best.heard, best_clip, best_words = wer, text, take, words
             if best_clip is not clip:
                 best.take = {k: v for k, v in asdict(best_clip).items()
                              if k in ("file", "duration", "seed")}
@@ -161,7 +247,15 @@ async def run(ctx: RunContext) -> None:
                 best.flags.append("wer")
             if missing_acronyms(expected, best.heard):
                 best.flags.append("acronym")
-            best.flags += audio_flags(ctx, ctx.path(best_clip.file))
+            path = ctx.path(best_clip.file)
+            samples, rate = read_mono(path)
+            if cfg.qa.mute_noise:
+                spans = noise_spans(samples, rate, speech_spans(expected, best_words), cfg.qa)
+                if spans:
+                    best.noise = [[a, b] for a, b in spans]
+                    best.noise_audio = file_sha256(path)
+                    samples = mute(samples, rate, spans)
+            best.flags += audio_flags(samples, rate, cfg.qa)
             results[gid] = best
             for uid in group.units:
                 ctx.reporter.unit_updated(uid, "qa-flagged" if best.flags else "qa-ok")
@@ -178,6 +272,10 @@ async def run(ctx: RunContext) -> None:
     retried = sum(1 for r in results.values() if r.retries)
     improved = sum(1 for r in results.values() if r.take)
     mean_wer = float(np.mean([r.wer for r in results.values()])) if results else 0.0
+    noisy = [gid for gid, r in sorted(results.items()) if r.noise]
+    muted = sum(b - a for r in results.values() for a, b in r.noise)
     ctx.info(f"QA: mean WER {mean_wer:.1%}; {retried} retried, {improved} improved by a retry, "
              f"{len(flagged)} flagged{': ' + ', '.join(flagged[:12]) if flagged else ''}; "
-             f"ASR cost ${cost:.4f}")
+             + (f"noises muted in {len(noisy)} clips ({muted:.1f}s): "
+                f"{', '.join(noisy[:12])}; " if noisy else "")
+             + f"ASR cost ${cost:.4f}")

@@ -6,6 +6,7 @@ import pytest
 import soundfile as sf
 
 from narration import artifacts
+from narration.cache import file_sha256
 from narration.config import Fit as FitConfig
 from narration.config import load_config
 from narration.context import RunContext
@@ -92,7 +93,11 @@ def test_fit_and_assemble_end_to_end(demo_video, tmp_path, stretch):
     artifacts.write_json(ctx.path("synth.json"), {"voice_id": "v", "groups": {
         "u0001": group("u0001", 0.5, 2.5, 4.5, "One.", long_clip),
         "u0003": group("u0003", 4.5, 6.0, 8.0, "Two.", 1.0)}})
-    artifacts.write_json(ctx.path("qa.json"), {"groups": {}})
+    # QA found a noise at the end of u0003's take; u0001's spans belong to another take.
+    clip3 = ctx.path("tts", "u0003.wav")
+    artifacts.write_json(ctx.path("qa.json"), {"groups": {
+        "u0001": {"noise": [[0.0, 1.0]], "noise_audio": "an older take"},
+        "u0003": {"noise": [[0.8, 1.6]], "noise_audio": file_sha256(clip3)}}})
 
     result = asyncio.run(run_pipeline(ctx, start="fit"))
     assert result.outcome is Outcome.COMPLETED, result.error
@@ -100,6 +105,11 @@ def test_fit_and_assemble_end_to_end(demo_video, tmp_path, stretch):
     first = timeline["entries"][0]
     # Silence around the clip was trimmed before fitting.
     assert sf.info(str(ctx.path(first["audio"]))).duration < long_clip + 0.2
+    def spoken(entry):  # fitted length before any speed-up
+        return sf.info(str(ctx.path(entry["audio"]))).duration * entry["atempo"]
+    assert spoken(first) > long_clip - 0.1                 # spans of another take: not muted
+    assert spoken(timeline["entries"][1]) < 0.6            # tone after 0.8 s muted, trimmed
+    assert not list(ctx.path("fitted").glob("*.mute.wav"))
     out = ffmpeg.probe(ctx.path("clean.mp4"))
     assert out.has_video and out.has_audio
     if stretch:

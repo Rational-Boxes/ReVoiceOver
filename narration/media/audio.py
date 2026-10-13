@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +22,25 @@ def read_mono(path: Path, start: float = 0.0, end: float | None = None) -> tuple
         f.seek(first)
         data = f.read(max(0, last - first), dtype="float32", always_2d=True)
     return data.mean(axis=1), rate
+
+
+def mute(samples: np.ndarray, rate: int, spans: Sequence[Sequence[float]],
+         fade_s: float = 0.01) -> np.ndarray:
+    """Silence ``spans``, fading over ``fade_s`` inside each edge so nothing clicks."""
+    out = samples.copy()
+    ramp = max(1, int(fade_s * rate))
+    for start, end in spans:
+        a, b = max(0, int(start * rate)), min(samples.size, int(end * rate))
+        if b <= a:
+            continue
+        gain = np.zeros(b - a, dtype=out.dtype)
+        r = min(ramp, (b - a) // 2)
+        if r and a > 0:
+            gain[:r] = np.linspace(1, 0, r, endpoint=False)
+        if r and b < samples.size:
+            gain[-r:] = np.linspace(0, 1, r, endpoint=False)
+        out[a:b] *= gain
+    return out
 
 
 def compute_peaks(samples: np.ndarray, rate: int,
