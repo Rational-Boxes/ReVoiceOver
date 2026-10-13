@@ -56,3 +56,7 @@ def test_open_project_and_run_extract(app, demo_video, tmp_path):
     status_col = frame.stages_panel.list.GetValue(0, 1)
     assert status_col == "done"
     assert "Extract audio" in frame.log_panel.text.GetValue()
+    model = frame.timeline.panel.model
+    assert model.duration == pytest.approx(8.0, abs=0.2)
+    assert model.peaks.shape[0] > 1000
+    assert model.units == []

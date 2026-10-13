@@ -37,3 +37,13 @@ def test_open_missing_video(tmp_path):
     video.unlink()
     with pytest.raises(ProjectError):
         Project.open(project.work_dir)
+
+
+def test_cli_work_dir_opens_in_gui(tmp_path):
+    from narration.config import load_config
+    from narration.context import RunContext
+
+    video = tmp_path / "talk.mp4"
+    video.write_text("v")
+    ctx = RunContext(video=video, work_dir=tmp_path / "cli-work", config=load_config())
+    assert Project.open(ctx.work_dir).video == video.resolve()

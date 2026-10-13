@@ -10,10 +10,9 @@ from typing import Any
 
 from narration import artifacts, stages
 from narration.config import CONFIG_NAME, Config, load_config, save_overrides
-from narration.context import RunContext, default_work_dir
+from narration.context import PROJECT_FILE, RunContext, default_work_dir
 from narration.progress import ProgressReporter
 
-PROJECT_FILE = "project.json"
 VIDEO_EXTENSIONS = (".mp4", ".mkv", ".mov", ".webm", ".avi", ".m4v")
 
 

@@ -12,6 +12,8 @@ from narration.config import Config
 from narration.credentials import mask
 from narration.progress import NullReporter, ProgressReporter
 
+PROJECT_FILE = "project.json"
+
 
 class Cancelled(Exception):
     """Raised when the user cancels a run; partial per-unit outputs are kept."""
@@ -35,6 +37,12 @@ class RunContext:
         self.video = self.video.resolve()
         self.work_dir = self.work_dir.resolve()
         self.work_dir.mkdir(parents=True, exist_ok=True)
+        # Record which video this work dir belongs to, so CLI-created work dirs
+        # open in the GUI too.
+        if not self.path(PROJECT_FILE).exists():
+            from narration.artifacts import write_json
+
+            write_json(self.path(PROJECT_FILE), {"video": str(self.video)})
 
     # -- paths -------------------------------------------------------------
     def path(self, *parts: str) -> Path:

@@ -22,6 +22,7 @@ from narration.gui.models.project_model import (
 from narration.gui.panels.log_panel import LogPanel
 from narration.gui.panels.stages_panel import StagesPanel
 from narration.gui.runner import PipelineRunner
+from narration.gui.timeline_controller import TimelineController
 from narration.gui.welcome import WelcomePanel
 from narration.pipeline import Outcome, RunResult
 
@@ -31,6 +32,8 @@ if TYPE_CHECKING:
 PAGE_WELCOME, PAGE_PROJECT = 0, 1
 FIELD_MSG, FIELD_GAUGE, FIELD_PATH = range(3)
 GAUGE_WIDTH = 160
+LAYOUT_VERSION = 2  # bump when panes are added so stale perspectives are ignored
+TIMELINE_STAGES = {"extract", "segment", "clean"}
 
 
 class _DropTarget(wx.FileDropTarget):
@@ -171,6 +174,10 @@ class MainFrame(wx.Frame):
         center.SetSizer(sizer)
         self.aui.AddPane(center, aui.AuiPaneInfo().Name("center").CenterPane())
 
+        self.timeline = TimelineController(self, self.infobar)
+        self.aui.AddPane(self.timeline.panel, aui.AuiPaneInfo().Name("timeline").Caption("Timeline")
+                         .Bottom().BestSize(-1, 210).MinSize(-1, 150).CloseButton(False))
+
         self._default_perspective = self.aui.SavePerspective()
         self.aui.Update()
 
@@ -246,6 +253,7 @@ class MainFrame(wx.Frame):
         self.log_panel.clear()
         self.book.SetSelection(PAGE_PROJECT)
         self.refresh_status()
+        self.timeline.load(project.work_dir)
 
     # ------------------------------------------------------------------ runs
     def _first_pending(self) -> str | None:
@@ -332,6 +340,8 @@ class MainFrame(wx.Frame):
 
     def _on_stage_done(self, event: wx.PyEvent) -> None:
         self.refresh_status()
+        if event.ok and event.stage in TIMELINE_STAGES and self.project is not None:
+            self.timeline.load(self.project.work_dir)
 
     # ------------------------------------------------------------ UI updates
     def _update_ui(self) -> None:
@@ -412,6 +422,7 @@ class MainFrame(wx.Frame):
                     return
             self.runner.cancel()
             self.runner.join(timeout=10)
+        self.timeline.stop()
         self._save_geometry()
         self.app.history.RemoveMenu(self.recent_menu)
         self.aui.UnInit()
@@ -420,7 +431,8 @@ class MainFrame(wx.Frame):
     # ------------------------------------------------------------ persistence
     def _restore_geometry(self) -> None:
         cfg = self.app.config
-        if (perspective := cfg.Read("/Window/Perspective", "")):
+        perspective = cfg.Read("/Window/Perspective", "")
+        if perspective and cfg.ReadInt("/Window/LayoutVersion", 0) == LAYOUT_VERSION:
             self.aui.LoadPerspective(perspective)
         w, h = cfg.ReadInt("/Window/Width", 0), cfg.ReadInt("/Window/Height", 0)
         if w and h:
@@ -432,6 +444,7 @@ class MainFrame(wx.Frame):
     def _save_geometry(self) -> None:
         cfg = self.app.config
         cfg.Write("/Window/Perspective", self.aui.SavePerspective())
+        cfg.WriteInt("/Window/LayoutVersion", LAYOUT_VERSION)
         cfg.WriteBool("/Window/Maximized", self.IsMaximized())
         if not self.IsMaximized():
             w, h = self.GetSize()
