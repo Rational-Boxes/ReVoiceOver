@@ -34,7 +34,9 @@ class _Section(BaseModel):
 
 class Models(_Section):
     asr_timestamped: str = "openai/whisper-timestamped-medium"
-    asr_text: str = Field("openai/whisper-large", description='"" disables the text pass')
+    # Optional higher-accuracy text pass (e.g. "openai/whisper-large-v3-turbo"),
+    # reconciled with the timestamped words. "" disables it; not wired up yet.
+    asr_text: str = ""
     llm: str = "Qwen/Qwen3-235B-A22B-Instruct-2507"
     tts: str = "Zyphra/Zonos-v0.1-hybrid"
     tts_alternate: str = "Audio8/Audio8-TTS-Preview-0.6b"
@@ -60,6 +62,12 @@ class Extract(_Section):
     chunk_search_s: float = Field(60.0, ge=0, description="look this far for a silence")
     silence_db: float = -35.0
     silence_min_s: float = 0.4
+
+
+class Transcribe(_Section):
+    language: str = Field("", description='ISO 639-1 code, "" = auto-detect')
+    glossary_prompt: bool = Field(True, description="prime Whisper with the glossary terms")
+    timeout_s: float = Field(900.0, gt=0, description="per-chunk request timeout")
 
 
 class Segment(_Section):
@@ -95,6 +103,7 @@ class Config(_Section):
     prices: Prices = Prices()
     network: Network = Network()
     extract: Extract = Extract()
+    transcribe: Transcribe = Transcribe()
     segment: Segment = Segment()
     clean: Clean = Clean()
     synth: Synth = Synth()
@@ -154,3 +163,9 @@ def save_overrides(path: Path, cfg: Config, base: Config) -> None:
 
     diff = _diff(cfg.model_dump(), base.model_dump())
     atomic_write_bytes(path, tomli_w.dumps(diff).encode())
+
+
+def project_file(video: Path, name: str) -> Path:
+    """Resolve a project-relative file name (glossary, prompts) beside the video."""
+    path = Path(name).expanduser()
+    return path if path.is_absolute() else video.resolve().parent / path

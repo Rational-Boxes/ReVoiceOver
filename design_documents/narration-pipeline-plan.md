@@ -36,7 +36,7 @@ adapter; the adapters exist precisely so that drift stays contained.
 | Stage | Default model | Why | Notes |
 |---|---|---|---|
 | Word timestamps | `openai/whisper-timestamped-medium` | Per-word start/end times, needed to anchor segments | Probe the raw response once and save it as a fixture; the docs example only shows segment-level output |
-| High-accuracy text (optional) | `openai/whisper-large` | Better transcription text | Use its text, keep timestamped-medium's timing, reconcile in `transcribe.py` |
+| High-accuracy text (optional) | `openai/whisper-large-v3-turbo` (`openai/whisper-large` is no longer listed) | Better transcription text | Use its text, keep timestamped-medium's timing, reconcile in `transcribe.py` |
 | Script cleanup | A strong open instruct model (Qwen, DeepSeek, or Llama family) via the OpenAI-compatible endpoint | JSON output, low temperature, cheap | Pick from the current DeepInfra catalog; keep it configurable |
 | Voice clone TTS | `Zyphra/Zonos-v0.1-hybrid` | Open weights, few-second reference cloning, speaking-rate control, native 44 kHz output, about $7 per 1M characters | Speaking-rate control helps the timing-fit stage |
 | Alternate TTS | `Audio8/Audio8-TTS-Preview-0.6b` | 0.6B multilingual, zero-shot cloning, about $5 per 1M characters | Preview model; keep as fallback / A-B comparison |
@@ -374,8 +374,15 @@ built, what was verified, and what comes next.
 
 ## 10. Open questions to settle early
 
-- Exact JSON shape of word timestamps from `whisper-timestamped-medium`
-  (milestone 3 answers this; everything downstream depends only on `Word`).
+- ~~Exact JSON shape of word timestamps from `whisper-timestamped-medium`~~
+  Answered in milestone 3 (see `narration/clients/asr.py` and
+  `tests/fixtures/whisper_timestamped_word.json`): words only come back with
+  `chunk_level=word`, as a top-level `words` list of `{word, start, end}`
+  with a leading space, attached punctuation and no confidence. Segments have
+  `avg_logprob` but no `confidence`. Pauses are only visible between
+  segments. Tokens such as `.0` or `/workspaces` come back as separate words
+  and must be joined without a space. Billing is per second of audio. A
+  572 s recording cost $0.43, as reported in `inference_status.cost`.
 - Whether Zonos's speaking-rate control is exposed through DeepInfra's API or
   only in the model's native interface. If not exposed, fall back to `atempo`.
 - Whether DeepInfra's registered voices are scoped per model (one voice_id per

@@ -1,0 +1,218 @@
+{
+ "request_id": "fixture",
+ "inference_status": {
+  "status": "succeeded",
+  "runtime_ms": 1643,
+  "cost": 0.00956625
+ },
+ "text": " So, today I want to show you the deployment dashboard.  First you open the settings panel, then, uh, you click deploy, I mean, you click the deploy button.",
+ "segments": [
+  {
+   "id": 0,
+   "seek": 0,
+   "start": 0.09,
+   "end": 4.7299999999999995,
+   "text": " So, today I want to show you the deployment dashboard.",
+   "tokens": [
+    407,
+    11,
+    965,
+    286,
+    528,
+    281,
+    855,
+    291,
+    264,
+    19317,
+    18342,
+    13
+   ],
+   "temperature": 0.0,
+   "avg_logprob": -0.257478941996981,
+   "compression_ratio": 0.9166666666666666,
+   "no_speech_prob": 0.0
+  },
+  {
+   "id": 0,
+   "seek": 6,
+   "start": 6.15,
+   "end": 12.75,
+   "text": " First you open the settings panel, then, uh, you click deploy, I mean, you click the deploy button.",
+   "tokens": [
+    2386,
+    291,
+    1269,
+    264,
+    6257,
+    4831,
+    11,
+    550,
+    11,
+    2232,
+    11,
+    291,
+    2052,
+    7274,
+    11,
+    286,
+    914,
+    11,
+    291,
+    2052,
+    264,
+    7274,
+    2960,
+    13
+   ],
+   "temperature": 0.0,
+   "avg_logprob": -0.1736618951142121,
+   "compression_ratio": 1.2048192771084338,
+   "no_speech_prob": 0.0
+  }
+ ],
+ "language": "en",
+ "input_length_ms": 12755,
+ "words": [
+  {
+   "word": " So,",
+   "start": 0.09,
+   "end": 0.4699999952316284
+  },
+  {
+   "word": " today",
+   "start": 0.4699999952316284,
+   "end": 0.9299999737739563
+  },
+  {
+   "word": " I",
+   "start": 0.9299999737739563,
+   "end": 1.4699999952316285
+  },
+  {
+   "word": " want",
+   "start": 1.4699999952316285,
+   "end": 1.7100000047683717
+  },
+  {
+   "word": " to",
+   "start": 1.7100000047683717,
+   "end": 1.8899999523162843
+  },
+  {
+   "word": " show",
+   "start": 1.8899999523162843,
+   "end": 2.070000019073486
+  },
+  {
+   "word": " you",
+   "start": 2.070000019073486,
+   "end": 2.270000066757202
+  },
+  {
+   "word": " the",
+   "start": 2.270000066757202,
+   "end": 2.6699999237060545
+  },
+  {
+   "word": " deployment",
+   "start": 2.6699999237060545,
+   "end": 3.2500000858306883
+  },
+  {
+   "word": " dashboard.",
+   "start": 3.2500000858306883,
+   "end": 4.029999938011169
+  },
+  {
+   "word": " First",
+   "start": 6.15,
+   "end": 6.550000005960465
+  },
+  {
+   "word": " you",
+   "start": 6.550000005960465,
+   "end": 6.770000004768372
+  },
+  {
+   "word": " open",
+   "start": 6.770000004768372,
+   "end": 7.130000019073487
+  },
+  {
+   "word": " the",
+   "start": 7.130000019073487,
+   "end": 7.289999985694886
+  },
+  {
+   "word": " settings",
+   "start": 7.289999985694886,
+   "end": 7.569999957084656
+  },
+  {
+   "word": " panel,",
+   "start": 7.569999957084656,
+   "end": 8.15
+  },
+  {
+   "word": " then,",
+   "start": 8.15,
+   "end": 8.469999933242798
+  },
+  {
+   "word": " uh,",
+   "start": 8.469999933242798,
+   "end": 8.669999980926514
+  },
+  {
+   "word": " you",
+   "start": 8.669999980926514,
+   "end": 8.890000009536744
+  },
+  {
+   "word": " click",
+   "start": 8.890000009536744,
+   "end": 9.269999885559082
+  },
+  {
+   "word": " deploy,",
+   "start": 9.269999885559082,
+   "end": 9.989999914169312
+  },
+  {
+   "word": " I",
+   "start": 9.989999914169312,
+   "end": 10.269999885559082
+  },
+  {
+   "word": " mean,",
+   "start": 10.269999885559082,
+   "end": 10.80999984741211
+  },
+  {
+   "word": " you",
+   "start": 10.80999984741211,
+   "end": 10.970000171661377
+  },
+  {
+   "word": " click",
+   "start": 10.970000171661377,
+   "end": 11.30999984741211
+  },
+  {
+   "word": " the",
+   "start": 11.30999984741211,
+   "end": 11.510000133514405
+  },
+  {
+   "word": " deploy",
+   "start": 11.510000133514405,
+   "end": 11.769999885559082
+  },
+  {
+   "word": " button.",
+   "start": 11.769999885559082,
+   "end": 12.36999979019165
+  }
+ ],
+ "duration": 12.755
+}

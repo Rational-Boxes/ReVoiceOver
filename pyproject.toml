@@ -45,7 +45,10 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["gui: needs a display (run under xvfb-run)", "ffmpeg: needs ffmpeg on PATH"]
+markers = [
+    "gui: needs a display (run under xvfb-run)",
+    "live: calls the real DeepInfra API (NARR_LIVE=1, costs money)",
+]
 
 [tool.mypy]
 python_version = "3.11"

@@ -81,7 +81,9 @@ def test_bad_range(fake_stages):
         asyncio.run(run_pipeline(ctx, start="qa", stop="segment"))
 
 
-def test_stub_stage_reports_not_implemented(tmp_path, demo_video):
-    ctx = RunContext(video=demo_video, work_dir=tmp_path / "w", config=load_config())
+def test_stub_stage_reports_not_implemented(fake_stages, monkeypatch):
+    ctx, _ = fake_stages
+    stub = importlib.reload(importlib.import_module("narration.stages.segment"))
+    monkeypatch.setattr(stub, "run", stub.run)
     result = asyncio.run(run_pipeline(ctx))
-    assert result.outcome is Outcome.NOT_IMPLEMENTED and result.last_stage == "transcribe"
+    assert result.outcome is Outcome.NOT_IMPLEMENTED and result.last_stage == "segment"
