@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import asyncio
 import threading
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
+from typing import Any
 
 from narration.context import RunContext
 from narration.gui.models.project_model import Project
@@ -43,6 +44,32 @@ class PipelineRunner:
             target=self._work, args=(ctx, start, stop, review),
             name=f"pipeline-{project.name}", daemon=True,
         )
+        self._thread.start()
+
+    def start_job(self, project: Project, job: Callable[[RunContext], Awaitable[Any]],
+                  on_done: Callable[[Any, BaseException | None], None]) -> None:
+        """Run a small async job (e.g. re-synth one unit) on the worker thread.
+
+        ``on_done(result, error)`` is called from the worker thread.
+        """
+        if self.running:
+            raise BusyError("a pipeline job is already running")
+        self._cancel = threading.Event()
+        ctx = project.context(self._reporter, self._cancel)
+
+        async def main() -> Any:
+            return await job(ctx)
+
+        def work() -> None:
+            try:
+                result = asyncio.run(main())
+            except BaseException as exc:  # reported to the UI, never swallowed silently
+                ctx.error(f"{type(exc).__name__}: {exc}")
+                on_done(None, exc)
+                return
+            on_done(result, None)
+
+        self._thread = threading.Thread(target=work, name=f"job-{project.name}", daemon=True)
         self._thread.start()
 
     def cancel(self) -> None:

@@ -17,7 +17,7 @@ def read_mono(path: Path, start: float = 0.0, end: float | None = None) -> tuple
     with sf.SoundFile(str(path)) as f:
         rate = f.samplerate
         first = max(0, int(start * rate))
-        last = f.frames if end is None else min(f.frames, int(end * rate))
+        last = f.frames if end is None or end == float("inf") else min(f.frames, int(end * rate))
         f.seek(first)
         data = f.read(max(0, last - first), dtype="float32", always_2d=True)
     return data.mean(axis=1), rate

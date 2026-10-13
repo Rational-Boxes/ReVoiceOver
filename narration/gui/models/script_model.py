@@ -94,7 +94,7 @@ class ScriptModel:
         }
 
     def tts_characters(self) -> int:
-        return sum(len(u.clean_text or "") for u in self.units if not u.keep_original)
+        return sum(len(u.clean_text or "") for u in self.units)
 
     # -- edits -------------------------------------------------------------
     def _apply(self, unit: Unit, field: str, value: Any) -> None:

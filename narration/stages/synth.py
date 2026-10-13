@@ -35,6 +35,7 @@ class Clip:
     chars: int
     seed: int
     cached: bool
+    text: str = ""     # the script text it was made from (before pronunciation fixes)
 
 
 def load_pronunciations(video: Path, cfg: Config) -> dict[str, str]:
@@ -81,7 +82,7 @@ async def synthesize_unit(ctx: RunContext, tts: TTSBackend, unit: Unit, voice_id
                 "-c:a", "pcm_s16le", str(out)], cancel=ctx.cancel)
     duration = ffmpeg.probe(out).duration
     return Clip(file=ctx.rel(out), duration=round(duration, 3), chars=len(text), seed=seed,
-                cached=cached)
+                cached=cached, text=unit.clean_text or "")
 
 
 def price_per_char(cfg: Config) -> float:
@@ -127,3 +128,22 @@ async def run(ctx: RunContext) -> None:
              f"{billed} chars billed (~${billed * price_per_char(cfg):.3f})"
              + (f", {reused} from cache" if reused else "")
              + (f"; {over} clip(s) longer than their slot" if over else ""))
+
+
+async def resynth(ctx: RunContext, unit: Unit, seed: int | None = None) -> Clip:
+    """Re-synthesize one unit (e.g. from the GUI) and update its synth.json entry."""
+    voice_id = artifacts.read_json(ctx.path("voice.json"))["voice_id"]
+    async with DeepInfraClient.from_context(ctx) as client:
+        tts = make_tts(client, ctx.config.models.tts)
+        clip = await synthesize_unit(ctx, tts, unit, voice_id,
+                                     load_pronunciations(ctx.video, ctx.config), seed)
+    path = ctx.path("synth.json")
+    try:
+        data = artifacts.read_json(path)
+    except FileNotFoundError:
+        data = {"model": ctx.config.models.tts, "voice_id": voice_id, "units": {}}
+    data["units"][unit.id] = asdict(clip)
+    artifacts.write_json(path, data)
+    ctx.info(f"{unit.id}: new take (seed {clip.seed}), {clip.duration:.1f}s"
+             + ("" if clip.cached else f", {clip.chars} chars"))
+    return clip

@@ -6,6 +6,7 @@ import difflib
 import re
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Any
 
 import wx
 import wx.stc as stc
@@ -59,6 +60,8 @@ class EditorCallbacks:
     keep_original: Callable[[str, bool], None]
     revert_llm: Callable[[str], None]
     use_raw: Callable[[str], None]
+    play_tts: Callable[[str], None]
+    new_take: Callable[[str], None]
     next_unit: Callable[[], None]
     back_to_list: Callable[[], None]
 
@@ -107,6 +110,8 @@ class UnitEditor(wx.Panel):
         super().__init__(parent)
         self.cb = callbacks
         self.unit: Unit | None = None
+        self.clip: dict[str, Any] | None = None  # synth.json entry for this unit
+        self.busy = False
         self.glossary: list[str] = []
         self._loading = False
 
@@ -123,6 +128,14 @@ class UnitEditor(wx.Panel):
         self.play_btn = wx.Button(self, label="Play Original")
         self.play_btn.SetBitmap(icons.bundle("run"))
         self.play_btn.SetToolTip("Play this unit from the source recording (Space in the list)")
+        self.tts_btn = wx.Button(self, label="Play Synthesized")
+        self.tts_btn.SetBitmap(icons.bundle("run"))
+        self.tts_btn.SetToolTip("Play the cloned-voice clip (Ctrl+Space in the list)")
+        self.take_btn = wx.Button(self, label="New Take")
+        self.take_btn.SetBitmap(icons.bundle("stale"))
+        self.take_btn.SetToolTip("Synthesize this unit again from the current text "
+                                 "(a different seed when the text is unchanged)")
+        self.clip_info = wx.StaticText(self)
         self.keep_cb = wx.CheckBox(self, label="Keep my original voice for this unit")
         self.keep_cb.SetToolTip("Patch mode: use the original audio instead of re-synthesizing")
         self.revert_btn = wx.Button(self, label="Revert to LLM Text")
@@ -138,11 +151,15 @@ class UnitEditor(wx.Panel):
         top.Add(self.ratio, 0, wx.ALIGN_CENTER_VERTICAL)
 
         buttons = wx.BoxSizer(wx.HORIZONTAL)
-        buttons.Add(self.play_btn, 0, wx.RIGHT, 12)
-        buttons.Add(self.keep_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 12)
+        buttons.Add(self.play_btn, 0, wx.RIGHT, 6)
+        buttons.Add(self.tts_btn, 0, wx.RIGHT, 6)
+        buttons.Add(self.take_btn, 0, wx.RIGHT, 10)
+        buttons.Add(self.clip_info, 0, wx.ALIGN_CENTER_VERTICAL)
         buttons.AddStretchSpacer()
         buttons.Add(self.raw_btn, 0, wx.RIGHT, 6)
         buttons.Add(self.revert_btn)
+        options = wx.BoxSizer(wx.HORIZONTAL)
+        options.Add(self.keep_cb, 0, wx.ALIGN_CENTER_VERTICAL)
 
         def label(text: str) -> wx.StaticText:
             st = wx.StaticText(self, label=text)
@@ -156,7 +173,9 @@ class UnitEditor(wx.Panel):
         sizer.Add(label("Narration to synthesize"), 0, wx.LEFT | wx.RIGHT, 8)
         sizer.Add(self.clean, 1, wx.EXPAND | wx.ALL, 6)
         sizer.Add(buttons, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 8)
-        sizer.Add(hint, 0, wx.ALL, 8)
+        options.AddStretchSpacer()
+        options.Add(hint, 0, wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(options, 0, wx.EXPAND | wx.ALL, 8)
         self.SetSizer(sizer)
 
         self.clean.Bind(stc.EVT_STC_MODIFIED, self._on_modified)
@@ -166,11 +185,14 @@ class UnitEditor(wx.Panel):
         self.keep_cb.Bind(wx.EVT_CHECKBOX, self._on_keep)
         self.revert_btn.Bind(wx.EVT_BUTTON, lambda _e: self._with_unit(self.cb.revert_llm))
         self.raw_btn.Bind(wx.EVT_BUTTON, lambda _e: self._with_unit(self.cb.use_raw))
+        self.tts_btn.Bind(wx.EVT_BUTTON, lambda _e: self._with_unit(self.cb.play_tts))
+        self.take_btn.Bind(wx.EVT_BUTTON, lambda _e: self._with_unit(self.cb.new_take))
         self.show(None)
 
     # -- display -----------------------------------------------------------
-    def show(self, unit: Unit | None) -> None:
+    def show(self, unit: Unit | None, clip: dict[str, Any] | None = None) -> None:
         self.unit = unit
+        self.clip = clip
         self._loading = True
         try:
             self.raw.SetReadOnly(False)
@@ -186,12 +208,42 @@ class UnitEditor(wx.Panel):
             self.header.SetLabel("No unit selected")
             self.flag_label.SetLabel("")
             self.ratio.SetLabel("")
+            self.clip_info.SetLabel("")
+            self.tts_btn.Disable()
+            self.take_btn.Disable()
             return
         self.header.SetLabel(f"{unit.id}   {format_time(unit.start, 0.1)} – "
                              f"{format_time(unit.end, 0.1)}   slot {unit.slot:.1f}s")
         self.keep_cb.SetValue(unit.keep_original)
         self.revert_btn.Enable(unit.edited)
+        self._refresh_clip()
         self._refresh_marks()
+
+    def set_busy(self, busy: bool) -> None:
+        self.busy = busy
+        self._refresh_clip()
+
+    def _refresh_clip(self) -> None:
+        unit, clip = self.unit, self.clip
+        has_text = bool(unit and unit.clean_text)
+        self.tts_btn.Enable(clip is not None)
+        self.take_btn.Enable(has_text and not self.busy)
+        if unit is None or clip is None:
+            self.clip_info.SetLabel("not synthesized yet" if has_text else "")
+            self.clip_info.SetForegroundColour(
+                wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
+            return
+        duration = float(clip["duration"])
+        text = f"clip {duration:.1f}s / slot {unit.slot:.1f}s"
+        colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
+        if clip.get("text") and clip["text"] != unit.clean_text:
+            text += " · text changed since synthesis"
+            colour = wx.Colour(217, 154, 30)
+        elif duration > unit.slot:
+            text += f" · {duration / unit.slot:.0%} of slot"
+            colour = wx.Colour(217, 154, 30)
+        self.clip_info.SetLabel(text)
+        self.clip_info.SetForegroundColour(colour)
 
     def _refresh_marks(self) -> None:
         if self.unit is None:

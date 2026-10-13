@@ -22,16 +22,18 @@ from narration.gui.models.project_model import (
 from narration.gui.panels.log_panel import LogPanel
 from narration.gui.panels.script_panel import ScriptCallbacks, ScriptPanel
 from narration.gui.panels.stages_panel import StagesPanel
+from narration.gui.panels.voice_panel import VoiceCallbacks, VoicePanel
 from narration.gui.runner import PipelineRunner
 from narration.gui.timeline_controller import TimelineController
 from narration.gui.welcome import WelcomePanel
 from narration.pipeline import Outcome, RunResult
+from narration.stages.synth import price_per_char, resynth
 
 if TYPE_CHECKING:
     from narration.gui.app import NarrApp
 
 PAGE_WELCOME, PAGE_PROJECT = 0, 1
-FIELD_MSG, FIELD_GAUGE, FIELD_PATH = range(3)
+FIELD_MSG, FIELD_GAUGE, FIELD_COST, FIELD_PATH = range(4)
 GAUGE_WIDTH = 160
 TIMELINE_STAGES = {"extract", "segment", "clean"}
 
@@ -72,8 +74,8 @@ class MainFrame(wx.Frame):
 
     # ------------------------------------------------------------------ build
     def _build_statusbar(self) -> None:
-        sb = self.CreateStatusBar(3)
-        sb.SetStatusWidths([-1, GAUGE_WIDTH, -1])
+        sb = self.CreateStatusBar(4)
+        sb.SetStatusWidths([-1, GAUGE_WIDTH, 170, -1])
         self.gauge = wx.Gauge(sb, range=100, style=wx.GA_HORIZONTAL | wx.GA_SMOOTH)
         self.gauge.Hide()
         sb.Bind(wx.EVT_SIZE, self._on_statusbar_size)
@@ -92,9 +94,17 @@ class MainFrame(wx.Frame):
         self.notebook = wx.Notebook(self.book)
         self.script = ScriptPanel(self.notebook, ScriptCallbacks(
             select=self.select_unit, play_original=lambda uid: self.timeline.play(uid),
+            play_tts=self.play_tts, new_take=self.new_take,
             approve=self.approve_script, changed=self._on_script_changed))
+        self.voice_panel = VoicePanel(self.notebook, VoiceCallbacks(
+            play_file=lambda p: self.timeline.play_file(p, show_playhead=False),
+            play_span=lambda a, b: self.timeline.play_span(a, b),
+            use_span=lambda a, b: self._set_voice({"ref_span": [a, b], "ref": ""}),
+            use_file=lambda p: self._set_voice({"ref": str(p), "ref_span": None}),
+            use_auto=lambda: self._set_voice({"ref": "", "ref_span": None})))
         self.log_panel = LogPanel(self.notebook)
         self.notebook.AddPage(self.script, "Script")
+        self.notebook.AddPage(self.voice_panel, "Voice")
         self.notebook.AddPage(self.log_panel, "Log")
         self.book.AddPage(self.welcome, "welcome")
         self.book.AddPage(self.notebook, "project")
@@ -186,6 +196,7 @@ class MainFrame(wx.Frame):
         self.refresh_status()
         self.timeline.load(project.work_dir)
         self.load_script()
+        self.voice_panel.load(project.work_dir)
 
     # ---------------------------------------------------------------- script
     def load_script(self) -> None:
@@ -216,6 +227,57 @@ class MainFrame(wx.Frame):
         self.timeline.refresh_units(self.script.model.units)
         bar = self.GetMenuBar()
         bar.Enable(wx.ID_SAVE, self.script.model.dirty)
+        if self.project is not None and self.script.model.loaded:
+            cost = self.script.model.tts_characters() * price_per_char(self.project.config())
+            self.SetStatusText(f"TTS for whole script ≈ ${cost:.2f}", FIELD_COST)
+
+    # ----------------------------------------------------------- voice / tts
+    def play_tts(self, unit_id: str) -> None:
+        clip = self.script.clips.get(unit_id)
+        if clip is not None and self.project is not None:
+            self.timeline.play_tts(unit_id, self.project.work_dir / clip["file"])
+
+    def new_take(self, unit_id: str) -> None:
+        """Re-synthesize one unit in the background, then play it."""
+        unit = self.script.model.get(unit_id)
+        if self.project is None or unit is None or self.runner.running or not unit.clean_text:
+            return
+        if not (self.project.work_dir / "voice.json").exists():
+            self.infobar.ShowMessage("Run the Voice stage first (Approve & Continue).",
+                                     wx.ICON_INFORMATION)
+            return
+        clip = self.script.clips.get(unit_id)
+        # Clips from before "text" was recorded count as unchanged text.
+        same_text = clip is not None and clip.get("text", unit.clean_text) == unit.clean_text
+        seed = int(clip["seed"]) + 1 if clip is not None and same_text else None
+        snapshot = type(unit).from_dict(unit.to_dict())  # the worker gets its own copy
+
+        def done(_result: object, error: BaseException | None) -> None:
+            wx.CallAfter(self._on_take_done, unit_id, error)
+
+        self.runner.start_job(self.project, lambda ctx: resynth(ctx, snapshot, seed), done)
+        self.SetStatusText(f"Synthesizing {unit_id}…", FIELD_MSG)
+        self._update_ui()
+
+    def _on_take_done(self, unit_id: str, error: BaseException | None) -> None:
+        if not self:
+            return
+        self.runner.join(timeout=2)  # the worker reports just before its thread exits
+        self._update_ui()
+        if error is not None:
+            self.SetStatusText(f"{unit_id}: synthesis failed", FIELD_MSG)
+            self.infobar.ShowMessage(f"Could not synthesize {unit_id}: {error}", wx.ICON_ERROR)
+            return
+        self.SetStatusText(f"{unit_id}: new take ready", FIELD_MSG)
+        self.script.load_clips()
+        self.play_tts(unit_id)
+
+    def _set_voice(self, overrides: dict[str, object]) -> None:
+        """Change the voice reference for this video, then re-run the Voice stage."""
+        if self.project is None or self.runner.running:
+            return
+        self.project.apply_overrides({"voice": overrides})
+        self.run_only("voice")
 
     def _confirm_unsaved(self, action: str) -> bool:
         """Ask about unsaved script edits; returns False to abort ``action``."""
@@ -278,6 +340,7 @@ class MainFrame(wx.Frame):
     def _on_run_finished(self, result: RunResult) -> None:
         if not self:  # window destroyed while the worker finished
             return
+        self.runner.join(timeout=2)  # the worker reports just before its thread exits
         self.gauge.Hide()
         self._current_stage = None
         self.refresh_status()
@@ -320,6 +383,10 @@ class MainFrame(wx.Frame):
             self.timeline.load(self.project.work_dir)
         if event.ok and event.stage == stages.REVIEW_AFTER:
             self.load_script()
+        if event.ok and event.stage == "voice" and self.project is not None:
+            self.voice_panel.load(self.project.work_dir)
+        if event.ok and event.stage == "synth":
+            self.script.load_clips()
 
     # ------------------------------------------------------------ UI updates
     def _update_ui(self) -> None:

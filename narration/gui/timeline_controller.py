@@ -27,6 +27,7 @@ class TimelineController(wx.EvtHandler):
         self.player = AudioPlayer()
         self.units: list[Unit] = []
         self.work_dir: Path | None = None
+        self._show_playhead = True
         self.timer = wx.Timer(self)
         self.Bind(wx.EVT_TIMER, self._on_timer, self.timer)
 
@@ -65,8 +66,26 @@ class TimelineController(wx.EvtHandler):
         if self.player.playing and self.panel.model.selected == unit_id:
             self.stop()
             return
+        self.play_file(self.work_dir / "audio_full.wav", unit.start, unit.end)
+
+    def play_tts(self, unit_id: str, clip: Path) -> None:
+        """Play a synthesized clip; the playhead runs from the unit's start."""
+        unit = self.unit(unit_id)
+        if unit is not None:
+            self.play_file(clip, 0.0, None, timeline_start=unit.start)
+
+    def play_span(self, start: float, end: float) -> None:
+        if self.work_dir is not None:
+            self.play_file(self.work_dir / "audio_full.wav", start, end)
+
+    def play_file(self, path: Path, start: float = 0.0, end: float | None = None,
+                  timeline_start: float | None = None, show_playhead: bool = True) -> None:
+        """Play any audio file, optionally without a timeline playhead."""
+        self._show_playhead = show_playhead
         try:
-            self.player.play(self.work_dir / "audio_full.wav", unit.start, unit.end)
+            if end is None:
+                end = float("inf")
+            self.player.play(path, start, end, timeline_start)
         except Exception as exc:
             self.infobar.ShowMessage(f"Cannot play audio: {exc}", wx.ICON_WARNING)
             return
@@ -79,7 +98,7 @@ class TimelineController(wx.EvtHandler):
 
     def _on_timer(self, _event: wx.TimerEvent) -> None:
         t = self.player.position()
-        self.panel.set_playhead(t)
+        self.panel.set_playhead(t if self._show_playhead else None)
         if t is None:
             self.timer.Stop()
 

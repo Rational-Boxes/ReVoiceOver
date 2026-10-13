@@ -37,15 +37,21 @@ class AudioPlayer:
     def available(self) -> bool:
         return self._sd is not None
 
-    def play(self, path: Path, start: float, end: float) -> None:
-        """Play ``path`` from ``start`` to ``end`` seconds (timeline time)."""
+    def play(self, path: Path, start: float, end: float,
+             timeline_start: float | None = None) -> None:
+        """Play ``path`` from ``start`` to ``end`` seconds.
+
+        ``position()`` reports timeline time: ``timeline_start`` plus elapsed
+        (defaults to ``start``, i.e. the file is the source recording).
+        """
         if self._sd is None:
             raise AudioUnavailable(self.error or "audio output unavailable")
         samples, rate = read_mono(path, start, end)
         self.stop()
         self._sd.play(samples, rate)
+        origin = start if timeline_start is None else timeline_start
         with self._lock:
-            self._start_t, self._end_t = start, start + len(samples) / rate
+            self._start_t, self._end_t = origin, origin + len(samples) / rate
             self._started_at = time.monotonic()
 
     def stop(self) -> None:

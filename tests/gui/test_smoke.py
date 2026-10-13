@@ -107,3 +107,48 @@ def test_script_review_flow(app, tmp_path):
     saved = artifacts.read_json(project.work_dir / "script.json")["units"]
     assert saved[1]["clean_text"] == "A better second sentence." and saved[1]["edited"]
     assert not panel.dirty and not frame.GetTitle().startswith("•")
+
+
+def test_voice_and_tts_controls(app, tmp_path):
+    import numpy as np
+    import soundfile as sf
+
+    from narration import artifacts
+    from narration.gui.models.project_model import Project
+    from narration.types import Unit
+
+    video = tmp_path / "talk.mp4"
+    video.write_text("v")
+    project = Project.create(video, tmp_path / "work")
+    work = project.work_dir
+    units = [Unit("u0001", 0.0, 1.0, 1.2, "um hi", "Hi.", "Hi."),
+             Unit("u0002", 1.2, 2.0, 3.0, "uh", "", "")]
+    artifacts.write_json(work / "script.json", {"units": [u.to_dict() for u in units]})
+    (work / "tts").mkdir()
+    sf.write(work / "tts" / "u0001.wav", np.zeros(44100, dtype=np.float32), 44100)
+    artifacts.write_json(work / "synth.json", {"units": {"u0001": {
+        "file": "tts/u0001.wav", "duration": 1.5, "chars": 3, "seed": 42, "cached": False,
+        "text": "Hi."}}})
+    artifacts.write_json(work / "voice.json", {
+        "model": "Zyphra/Zonos-v0.1-hybrid", "voice_id": "v1", "ref_span": [3.0, 14.0],
+        "reused": False, "candidates": [{"start": 3.0, "end": 14.0, "score": 0.9,
+                                         "confidence": 0.9, "text": "hello there"}]})
+
+    frame = app.new_window()
+    frame._attach(project)
+    frame.select_unit("u0001")
+    editor = frame.script.editor
+    assert editor.tts_btn.IsEnabled() and editor.take_btn.IsEnabled()
+    assert "clip 1.5s / slot 1.2s" in editor.clip_info.GetLabel()
+    editor.clean.SetText("Hello!")
+    editor.commit()
+    assert "text changed since synthesis" in editor.clip_info.GetLabel()
+
+    frame.select_unit("u0002")
+    assert not frame.script.editor.take_btn.IsEnabled()  # dropped: nothing to synthesize
+
+    vp = frame.voice_panel
+    assert "Voice v1" in vp.summary.GetLabel()
+    assert vp.alts.GetItemCount() == 1
+    assert "TTS for whole script" in frame.GetStatusBar().GetStatusText(2)
+    frame.script.model.dirty = False

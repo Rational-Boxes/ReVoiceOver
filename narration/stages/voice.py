@@ -110,6 +110,13 @@ async def run(ctx: RunContext) -> None:
         ctx.info(f"using reference clip {source}")
         ffmpeg.run(["-i", str(source), "-ac", "1", "-ar", "44100",
                     "-af", "afftdn,loudnorm", str(ref)], cancel=ctx.cancel)
+    elif cfg.voice.ref_span:
+        start, end = cfg.voice.ref_span
+        span = (start, end)
+        ctx.info(f"using chosen reference span {start:.1f}-{end:.1f}s")
+        ffmpeg.run(["-ss", f"{start:.3f}", "-to", f"{end:.3f}", "-i", str(full),
+                    "-ac", "1", "-ar", "44100", "-af", "afftdn,loudnorm", str(ref)],
+                   cancel=ctx.cancel)
     else:
         words = [Word.from_dict(w) for w in artifacts.read_json(ctx.path("words.json"))["words"]]
         candidates = [c for c in find_candidates(words, cfg.voice, limit=6)
@@ -143,5 +150,12 @@ async def run(ctx: RunContext) -> None:
     artifacts.write_json(ctx.path("voice.json"), {
         "model": cfg.models.tts, "voice_id": entry["voice_id"], "ref_sha256": ref_sha,
         "ref_file": REF_FILE, "ref_span": span, "reused": reused,
-        "candidates": [asdict(c) for c in candidates],
+        "candidates": [asdict(c) for c in candidates] or _previous_candidates(ctx),
     })
+
+
+def _previous_candidates(ctx: RunContext) -> list[dict[str, Any]]:
+    try:
+        return list(artifacts.read_json(ctx.path("voice.json")).get("candidates", []))
+    except (FileNotFoundError, artifacts.SchemaError):
+        return []

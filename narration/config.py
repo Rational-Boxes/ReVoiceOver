@@ -86,6 +86,7 @@ class Clean(_Section):
 
 class Voice(_Section):
     ref: str = Field("", description="reference clip to clone; empty = pick one automatically")
+    ref_span: list[float] | None = Field(None, description="[start, end] in the source video")
     min_ref_s: float = 8.0
     max_ref_s: float = 15.0
     max_gap_s: float = Field(1.0, description="longest pause allowed inside the reference")

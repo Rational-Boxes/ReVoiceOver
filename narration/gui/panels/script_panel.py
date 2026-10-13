@@ -5,10 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 import wx
 import wx.dataview as dv
 
+from narration import artifacts
 from narration.gui import icons
 from narration.gui.models.script_model import ScriptModel
 from narration.gui.models.timeline_model import format_time
@@ -23,6 +25,8 @@ COL_FLAG, COL_ID, COL_START, COL_SLOT, COL_TEXT, COL_RATIO = range(6)
 class ScriptCallbacks:
     select: Callable[[str], None]          # keep the timeline in sync
     play_original: Callable[[str], None]
+    play_tts: Callable[[str], None]
+    new_take: Callable[[str], None]
     approve: Callable[[], None]
     changed: Callable[[], None]            # dirty state or text changed
 
@@ -32,6 +36,7 @@ class ScriptPanel(wx.Panel):
         super().__init__(parent)
         self.cb = callbacks
         self.model = ScriptModel()
+        self.clips: dict[str, dict[str, Any]] = {}  # synth.json entries by unit id
         self._rows: list[str] = []
         self._selecting = False
 
@@ -80,6 +85,8 @@ class ScriptPanel(wx.Panel):
             keep_original=lambda uid, v: self._change(uid, "keep_original", v),
             revert_llm=lambda uid: self._after_edit(uid, self.model.revert_to_llm(uid)),
             use_raw=lambda uid: self._after_edit(uid, self.model.revert_to_raw(uid)),
+            play_tts=self.cb.play_tts,
+            new_take=self.cb.new_take,
             next_unit=lambda: self.move(1),
             back_to_list=self.list.SetFocus,
         ))
@@ -111,12 +118,25 @@ class ScriptPanel(wx.Panel):
     def load(self, work_dir: Path, video_name: str, glossary: list[str]) -> None:
         selected = self.selected_id()
         has_script = self.model.load(work_dir, video_name)
+        self.load_clips()
         self.editor.glossary = glossary
         self.book.SetSelection(PAGE_SCRIPT if has_script else PAGE_EMPTY)
         self._refill()
         if selected and self.model.get(selected):
             self.select(selected)
         self.cb.changed()
+
+    def load_clips(self) -> None:
+        if self.model.work_dir is None:
+            return
+        try:
+            data = artifacts.read_json(self.model.work_dir / "synth.json")
+            self.clips = dict(data.get("units", {}))
+        except (FileNotFoundError, artifacts.SchemaError):
+            self.clips = {}
+        if self.editor.unit is not None:
+            self.editor.show(self.model.get(self.editor.unit.id),
+                             self.clips.get(self.editor.unit.id))
 
     def save(self) -> None:
         self.editor.commit()
@@ -130,7 +150,8 @@ class ScriptPanel(wx.Panel):
 
     def set_busy(self, busy: bool) -> None:
         """Lock editing while a pipeline job may rewrite script.json."""
-        self.editor.Enable(not busy)
+        self.editor.clean.Enable(not busy)
+        self.editor.set_busy(busy)
         self.approve_btn.Enable(not busy and self.model.loaded)
 
     # -- list --------------------------------------------------------------
@@ -199,7 +220,7 @@ class ScriptPanel(wx.Panel):
         finally:
             self._selecting = False
         self.editor.commit()
-        self.editor.show(self.model.get(unit_id))
+        self.editor.show(self.model.get(unit_id), self.clips.get(unit_id))
 
     def move(self, step: int) -> None:
         row = self.list.GetSelectedRow()
@@ -213,7 +234,8 @@ class ScriptPanel(wx.Panel):
             return
         self.editor.commit()
         unit_id = self.selected_id()
-        self.editor.show(self.model.get(unit_id) if unit_id else None)
+        self.editor.show(self.model.get(unit_id) if unit_id else None,
+                         self.clips.get(unit_id) if unit_id else None)
         if unit_id:
             self.cb.select(unit_id)
 
@@ -224,7 +246,7 @@ class ScriptPanel(wx.Panel):
             return
         key = event.GetKeyCode()
         if key == wx.WXK_SPACE and (uid := self.selected_id()):
-            self.cb.play_original(uid)
+            (self.cb.play_tts if event.ControlDown() else self.cb.play_original)(uid)
         elif key in (wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER) and self.selected_id():
             self.editor.focus_text()
         else:
@@ -242,7 +264,7 @@ class ScriptPanel(wx.Panel):
             return
         self._refresh_row(unit_id)
         if self.editor.unit is not None and self.editor.unit.id == unit_id:
-            self.editor.show(self.model.get(unit_id))
+            self.editor.show(self.model.get(unit_id), self.clips.get(unit_id))
         self._update_stats()
         self.cb.changed()
 
