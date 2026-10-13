@@ -93,9 +93,14 @@ class ScriptPanel(wx.Panel):
             next_unit=lambda: self.move(1),
             back_to_list=self.list.SetFocus,
         ))
-        self.splitter.SplitHorizontally(self.list, self.editor, -300)
-        self.splitter.SetMinimumPaneSize(160)
-        self.splitter.SetSashGravity(1.0)
+        # Share the height between list and editor, so neither gets squeezed to
+        # nothing on a small window. The sash can be dragged.
+        self.splitter.SplitHorizontally(self.list, self.editor)
+        self.splitter.SetSashGravity(0.5)
+        self.splitter.SetMinimumPaneSize(self.FromDIP(100))
+        self._sash_dragged = False
+        self.splitter.Bind(wx.EVT_SIZE, self._on_splitter_size)
+        self.splitter.Bind(wx.EVT_SPLITTER_SASH_POS_CHANGED, self._on_sash_dragged)
 
         ps = wx.BoxSizer(wx.VERTICAL)
         ps.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
@@ -116,6 +121,7 @@ class ScriptPanel(wx.Panel):
         self.list.Bind(dv.EVT_DATAVIEW_SELECTION_CHANGED, self._on_selection)
         self.list.Bind(dv.EVT_DATAVIEW_ITEM_ACTIVATED, lambda _e: self.editor.focus_text())
         self.list.Bind(wx.EVT_CHAR_HOOK, self._on_list_key)
+        self.Bind(wx.EVT_CHAR_HOOK, self._on_panel_key)
 
     # -- load / save -------------------------------------------------------
     def load(self, work_dir: Path, video_name: str, glossary: list[str]) -> None:
@@ -251,6 +257,28 @@ class ScriptPanel(wx.Panel):
             self.editor.show(None)
         if unit_id:
             self.cb.select(unit_id)
+
+    def _on_splitter_size(self, event: wx.SizeEvent) -> None:
+        # Until the user drags the sash: the editor gets the height it needs (at
+        # most half), the list the rest. After a drag, gravity shares any change.
+        if not self._sash_dragged:
+            height = event.GetSize().height
+            editor = min(self.editor.GetBestSize().height, height // 2)
+            wx.CallAfter(self.splitter.SetSashPosition, height - editor)
+        event.Skip()
+
+    def _on_sash_dragged(self, event: wx.SplitterEvent) -> None:
+        self._sash_dragged = True
+        event.Skip()
+
+    def _on_panel_key(self, event: wx.KeyEvent) -> None:
+        """Alt+Up / Alt+Down: previous / next unit, from anywhere in the tab."""
+        key = event.GetKeyCode()
+        if event.AltDown() and not event.ControlDown() and key in (wx.WXK_UP, wx.WXK_DOWN):
+            self.editor.commit()
+            self.move(-1 if key == wx.WXK_UP else 1)
+        else:
+            event.Skip()
 
     def _on_list_key(self, event: wx.KeyEvent) -> None:
         if self.FindFocus() is not self.list.GetMainWindow() and \

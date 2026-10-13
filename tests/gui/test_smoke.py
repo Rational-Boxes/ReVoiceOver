@@ -117,6 +117,18 @@ def test_script_review_flow(app, tmp_path):
     assert panel.model.get("u0002").edited
     assert frame.GetTitle().startswith("•")
 
+    # Alt+Up from the editor goes back a unit.
+    key = wx.KeyEvent(wx.wxEVT_CHAR_HOOK)
+    key.SetKeyCode(wx.WXK_UP)
+    key.SetAltDown(True)
+    panel._on_panel_key(key)
+    assert panel.selected_id() == "u0002"
+
+    # The list keeps a real share of the height (not squeezed by the editor).
+    frame.SetSize(1000, 600)
+    wx.SafeYield()
+    assert panel.list.GetSize().height >= panel.splitter.GetSize().height // 3
+
     panel.undo()
     assert panel.model.get("u0002").clean_text == "Sentence 2."
     panel.redo()
