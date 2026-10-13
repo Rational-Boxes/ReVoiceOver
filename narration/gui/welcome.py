@@ -5,8 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 
 import wx
+import wx.adv
 
 from narration.gui import icons
+from narration.gui.help_viewer import show_help
 
 
 class WelcomePanel(wx.Panel):
@@ -37,7 +39,11 @@ class WelcomePanel(wx.Panel):
         col.Add(title, 0, wx.ALIGN_CENTER | wx.BOTTOM, 6)
         col.Add(subtitle, 0, wx.ALIGN_CENTER | wx.BOTTOM, 24)
         col.Add(hint, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
-        col.Add(buttons, 0, wx.ALIGN_CENTER)
+        col.Add(buttons, 0, wx.ALIGN_CENTER | wx.BOTTOM, 18)
+        guide = wx.adv.HyperlinkCtrl(self, label="New here? Read the Getting Started guide",
+                                     url="help:getting-started")
+        guide.Bind(wx.adv.EVT_HYPERLINK, lambda _e: show_help("getting-started"))
+        col.Add(guide, 0, wx.ALIGN_CENTER)
 
         outer = wx.BoxSizer(wx.VERTICAL)
         outer.AddStretchSpacer()

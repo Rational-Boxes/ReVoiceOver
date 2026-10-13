@@ -1,0 +1,18 @@
+<h1>Costs</h1>
+<p>All model inference runs on DeepInfra and is billed to your account. Measured on
+a 9&frac12;-minute screen recording (about 1,000 words):</p>
+<table border="1" cellpadding="5" cellspacing="0">
+<tr><th align="left">Step</th><th align="left">Model</th><th align="right">Cost</th></tr>
+<tr><td>Transcribe</td><td>whisper-timestamped-medium (billed by runtime)</td><td align="right">$0.43</td></tr>
+<tr><td>Clean script</td><td>Qwen3-235B-A22B-Instruct</td><td align="right">$0.002</td></tr>
+<tr><td>Voice</td><td>registration</td><td align="right">free</td></tr>
+<tr><td>Synthesize</td><td>Zonos v0.1 hybrid, $7 per million characters</td><td align="right">$0.04</td></tr>
+<tr><td>Quality check</td><td>whisper-large-v3-turbo, including retries</td><td align="right">$0.16</td></tr>
+<tr><td colspan="2"><b>Total</b></td><td align="right"><b>about $0.65</b></td></tr>
+</table>
+<p>The status bar shows an estimate of the synthesis cost for the current script.
+The Log reports what each run was actually billed.</p>
+<h2><a name="caching"></a>Not paying twice</h2>
+<p>Every API result is cached in the work folder by its exact inputs. Re-running
+a stage, cancelling and resuming, or making a new take of one unit only pays for
+what actually changed.</p>

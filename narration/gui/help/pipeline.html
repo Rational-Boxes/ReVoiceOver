@@ -1,0 +1,70 @@
+<h1>Pipeline stages</h1>
+<p>The <b>Stages</b> list on the left shows each step and its status. Every stage
+reads the previous stage's files and writes its own into the work folder.</p>
+
+<h2><a name="status"></a>Status icons</h2>
+<table border="0" cellpadding="4">
+<tr><td><b>done</b></td><td>The stage ran and its inputs have not changed since.</td></tr>
+<tr><td><b>stale</b></td><td>An input changed after the stage ran (for example you
+edited the script), so it needs to run again. Stages after a stale stage are
+stale too.</td></tr>
+<tr><td><b>failed</b></td><td>The last attempt failed; the reason is shown next to it
+and in the Log.</td></tr>
+<tr><td><b>running…</b></td><td>In progress, with a percentage where known.</td></tr>
+<tr><td><b>waiting for you</b></td><td>The run paused for script review.</td></tr>
+</table>
+
+<h2><a name="running"></a>Running stages</h2>
+<ul>
+  <li><b>Run</b> (Ctrl+R) starts at the first stage that is not done and stops at
+      the review checkpoint.</li>
+  <li><b>Run From</b> (toolbar drop-down, or double-click a stage) re-runs from a
+      chosen stage onward.</li>
+  <li>Right-click a stage for <b>Run only</b>.</li>
+  <li><b>Cancel</b> (Ctrl+.) stops the job. Finished pieces are kept in the cache,
+      so the next run continues where it stopped without paying twice.</li>
+</ul>
+
+<h2><a name="extract"></a>Extract audio</h2>
+<p>Reads the video's duration and format, and writes two audio files: a
+16&nbsp;kHz copy for speech recognition and a 44.1&nbsp;kHz copy for playback and the
+voice reference. Recordings longer than about ten minutes are split at silences.</p>
+
+<h2><a name="transcribe"></a>Transcribe</h2>
+<p>Whisper (<tt>whisper-timestamped-medium</tt>) produces every word with its start and
+end time. Your <a href="project-files.html#glossary">glossary</a> primes it with the
+right spellings. Results are cached by audio content.</p>
+
+<h2><a name="segment"></a>Segment</h2>
+<p>Groups words into <b>narration units</b>: short pieces that end at a pause
+(over 0.6&nbsp;s) or at the end of a sentence. Each unit keeps its <b>slot</b>, the
+time from its start until the next unit starts. The new narration must fit there.
+Very short fragments merge with their neighbour; very long ones are split.</p>
+
+<h2><a name="clean"></a>Clean script</h2>
+<p>A language model removes fillers, stutters, repeats and false starts from each
+unit. Every unit comes back separately so it stays anchored to its place in the
+video. Suspicious results are <a href="script-review.html#flags">flagged</a>.</p>
+
+<h2><a name="review"></a>Review script</h2>
+<p>The checkpoint where you read and fix the script.
+See <a href="script-review.html">Reviewing the script</a>.</p>
+
+<h2><a name="voice"></a>Voice</h2>
+<p>Picks a clean 8&ndash;15&nbsp;s stretch of your recording, uploads it once to
+DeepInfra and stores the returned voice id. See <a href="voice.html">Voice</a>.</p>
+
+<h2><a name="synth"></a>Synthesize</h2>
+<p>Speaks every unit in the cloned voice (Zonos), normalizes the loudness and
+caches each clip by its text, so editing one sentence only re-synthesizes that
+sentence.</p>
+
+<h2><a name="qa"></a>Quality check</h2>
+<p>Listens to every clip with Whisper and compares it to the script. Bad takes
+are retried automatically. See <a href="quality.html">Quality check</a>.</p>
+
+<h2><a name="fit"></a>Fit timing and Assemble</h2>
+<p>Fit each clip into its slot (padding, gentle speed-up or stretching the video),
+then build the narration track and the final video with subtitles.</p>
+<table class="note"><tr><td>These two stages are not available in this version yet;
+running them reports that they are coming.</td></tr></table>

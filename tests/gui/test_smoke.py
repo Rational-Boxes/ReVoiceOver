@@ -150,7 +150,7 @@ def test_voice_and_tts_controls(app, tmp_path):
     vp = frame.review.voice_panel
     assert "Voice v1" in vp.summary.GetLabel()
     assert vp.alts.GetItemCount() == 1
-    assert "TTS for whole script" in frame.GetStatusBar().GetStatusText(2)
+    assert "Script TTS" in frame.GetStatusBar().GetStatusText(2)
     frame.script.model.dirty = False
 
 
@@ -190,3 +190,29 @@ def test_quality_tab(app, tmp_path):
     frame.review.edit_unit("u0003")
     assert frame.script.selected_id() == "u0003"
     assert "long silence" in frame.script.editor.flag_label.GetLabel()
+
+
+def test_help_viewer(app):
+    from narration.gui.help_viewer import show_help
+
+    frame = app.new_window()
+    viewer = show_help("quality#pronunciations")
+    assert viewer.IsShown() and "Quality check" in viewer.GetTitle()
+    assert "pronunciations.toml" in viewer.view.ToText()
+    item = viewer.tree.GetSelection()
+    assert viewer.tree.GetItemText(item) == "Acronyms and pronunciation"
+
+    viewer.follow("voice.html#registry")
+    assert "Voice" in viewer.GetTitle()
+    viewer.go(-1)
+    assert "Quality check" in viewer.GetTitle()
+    viewer.go(1)
+    assert "Voice" in viewer.GetTitle()
+
+    viewer.search.SetValue("glossary")
+    viewer._on_search(None)
+    assert viewer.side.GetSelection() == 1 and viewer.results.GetCount() > 0
+
+    assert show_help("keyboard") is viewer  # one help window per app
+    assert frame.help_topic() == "getting-started"  # no project open yet
+    viewer.Destroy()

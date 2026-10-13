@@ -11,6 +11,7 @@ import wx
 import wx.dataview as dv
 
 from narration.gui import icons
+from narration.gui.help_viewer import help_button
 from narration.gui.models.script_model import ScriptModel
 from narration.gui.models.timeline_model import format_time
 from narration.gui.panels.unit_editor import EditorCallbacks, UnitEditor
@@ -69,7 +70,9 @@ class ScriptPanel(wx.Panel):
         bar.Add(self.changed_cb, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 10)
         bar.Add(self.stats, 1, wx.ALIGN_CENTER_VERTICAL)
         bar.Add(self.save_btn, 0, wx.RIGHT, 6)
-        bar.Add(self.approve_btn)
+        bar.Add(self.approve_btn, 0, wx.RIGHT, 6)
+        bar.Add(help_button(page, "script-review#list", "reviewing the script"), 0,
+                wx.ALIGN_CENTER_VERTICAL)
 
         self.splitter = wx.SplitterWindow(page, style=wx.SP_LIVE_UPDATE | wx.SP_3DSASH)
         self.list = dv.DataViewListCtrl(self.splitter, style=dv.DV_ROW_LINES | dv.DV_SINGLE)

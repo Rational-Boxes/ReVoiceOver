@@ -8,6 +8,7 @@ from datetime import datetime
 import wx
 
 from narration.credentials import mask
+from narration.gui.help_viewer import help_button
 
 LEVELS = (("Debug", logging.DEBUG), ("Info", logging.INFO),
           ("Warnings", logging.WARNING), ("Errors", logging.ERROR))
@@ -32,7 +33,9 @@ class LogPanel(wx.Panel):
         bar.Add(self.level, 0, wx.ALIGN_CENTER_VERTICAL)
         bar.AddStretchSpacer()
         bar.Add(copy_btn, 0, wx.RIGHT, 6)
-        bar.Add(clear_btn)
+        bar.Add(clear_btn, 0, wx.RIGHT, 6)
+        bar.Add(help_button(self, "troubleshooting", "troubleshooting"), 0,
+                wx.ALIGN_CENTER_VERTICAL)
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(bar, 0, wx.EXPAND | wx.ALL, 6)
         sizer.Add(self.text, 1, wx.EXPAND)

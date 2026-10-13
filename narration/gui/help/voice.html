@@ -1,0 +1,31 @@
+<h1>Voice</h1>
+<p>ReVoiceOver speaks the cleaned script in a clone of your own voice. The clone
+is made from a short <b>reference clip</b> of your recording.</p>
+
+<h2><a name="reference"></a>The reference clip</h2>
+<p>The <b>Voice</b> stage looks for the best 8&ndash;15 second stretch of continuous
+speech: no fillers, no long pauses, a confident transcript and a healthy level
+without distortion. It cleans it lightly (noise reduction, loudness) and saves it
+as <tt>voice_ref.wav</tt> in the work folder.</p>
+<p>On the <b>Voice</b> tab you can:</p>
+<ul>
+  <li><b>Play Reference Clip</b> to hear what the clone is based on.</li>
+  <li>Pick one of the <b>other clean stretches</b>: play it, then <b>Use This One</b>.</li>
+  <li><b>Use My Own Clip…</b> to supply a separate recording (10&ndash;15 s of natural
+      speech in a quiet room works best).</li>
+  <li><b>Pick Automatically</b> to go back to the automatic choice.</li>
+</ul>
+<p>Changing the reference re-runs the Voice stage. The synthesized clips then
+become <a href="pipeline.html#status">stale</a> and are re-made on the next run.</p>
+
+<h2><a name="registry"></a>Registered voices</h2>
+<p>The clip is uploaded to DeepInfra once, which returns a <b>voice id</b>.
+ReVoiceOver remembers it in <tt>~/.config/narr/voices.json</tt>, keyed by the clip's
+content, so the same clip is never uploaded twice, even for another video.</p>
+<table class="note"><tr><td><b>Privacy:</b> registering a voice uploads the reference
+clip to DeepInfra and stores it with your account.</td></tr></table>
+
+<h2><a name="models"></a>Voice models</h2>
+<p>Synthesis uses <tt>Zyphra/Zonos-v0.1-hybrid</tt>, which supports cloned voices,
+speaking rate and repeatable takes (seeds). Models without voice cloning cannot be
+used for synthesis.</p>

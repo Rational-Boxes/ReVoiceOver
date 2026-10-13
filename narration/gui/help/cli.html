@@ -1,0 +1,17 @@
+<h1>Command line</h1>
+<p>Everything the app does is also available from the <tt>narr</tt> command, which
+uses the same work folders. A project started in one can be continued in the other.</p>
+<pre>
+narr run VIDEO                 # run until the review checkpoint
+narr run VIDEO --from voice    # continue after reviewing script.json
+narr run VIDEO --to transcribe # stop after a stage
+narr run VIDEO --no-review     # don't pause for review
+narr status VIDEO              # show each stage's status
+narr gui [VIDEO]               # open the desktop app
+narr token set | clear | status
+narr --env-file PATH ...       # read the token from this file
+</pre>
+<p>The command-line work folder defaults to <tt>./work/&lt;video name&gt;</tt> in the
+current directory; use <tt>--work-dir</tt> to choose another. To review on the
+command line, edit <tt>clean_text</tt> in <tt>script.json</tt> (set
+<tt>"edited": true</tt> to protect your change) and read <tt>script.md</tt> for the diff.</p>

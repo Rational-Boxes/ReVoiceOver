@@ -1,0 +1,34 @@
+<h1>ReVoiceOver Help</h1>
+<p>ReVoiceOver rebuilds the narration of a screen recording. It transcribes what
+you said, cleans the script (fillers, stutters, false starts), lets you review
+it, then re-speaks it in a clone of your own voice, timed to the original
+video.</p>
+
+<h2>How a project flows</h2>
+<ol>
+  <li><b>Create a project</b> from a video. See <a href="getting-started.html#new-project">Getting started</a>.</li>
+  <li><b>Run</b> the pipeline. Audio is extracted, transcribed, split into
+      narration units and cleaned by a language model.
+      See <a href="pipeline.html">Pipeline stages</a>.</li>
+  <li><b>Review the script</b>. The run pauses so you can read and fix the
+      cleaned text. See <a href="script-review.html">Reviewing the script</a>.</li>
+  <li><b>Approve &amp; Continue</b>. Your voice is cloned, every unit is
+      synthesized, and a quality check listens to each clip.
+      See <a href="voice.html">Voice</a> and <a href="quality.html">Quality check</a>.</li>
+  <li><b>Fix what QA flags</b>, then finish the video.</li>
+</ol>
+
+<h2>Topics</h2>
+<ul>
+  <li><a href="getting-started.html">Getting started</a>: install, API token, first project</li>
+  <li><a href="pipeline.html">Pipeline stages</a>: what each stage does and what its status means</li>
+  <li><a href="script-review.html">Reviewing the script</a>: list, editor, flags, approval</li>
+  <li><a href="timeline.html">Timeline</a>: waveform, units, playback</li>
+  <li><a href="voice.html">Voice</a>: the reference clip and voice cloning</li>
+  <li><a href="quality.html">Quality check</a>: word error rate, retries, fixes</li>
+  <li><a href="project-files.html">Project files &amp; settings</a>: work folder, config, glossary, pronunciations</li>
+  <li><a href="costs.html">Costs</a>: what each step costs on DeepInfra</li>
+  <li><a href="keyboard.html">Keyboard shortcuts</a></li>
+  <li><a href="cli.html">Command line</a>: the <tt>narr</tt> command</li>
+  <li><a href="troubleshooting.html">Troubleshooting</a></li>
+</ul>

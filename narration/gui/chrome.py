@@ -22,6 +22,8 @@ class Ids:
     show_folder: wx.WindowIDRef = field(default_factory=wx.NewIdRef)
     reset_layout: wx.WindowIDRef = field(default_factory=wx.NewIdRef)
     token: wx.WindowIDRef = field(default_factory=wx.NewIdRef)
+    help_start: wx.WindowIDRef = field(default_factory=wx.NewIdRef)
+    help_keys: wx.WindowIDRef = field(default_factory=wx.NewIdRef)
     run_from_tool: wx.WindowIDRef = field(default_factory=wx.NewIdRef)
     run_from: dict[int, str] = field(default_factory=dict)  # menu item id -> stage
 
@@ -75,6 +77,10 @@ def build_menubar(history: wx.FileHistory, ids: Ids) -> tuple[wx.MenuBar, wx.Men
     bar.Append(settings_menu, "&Settings")
 
     help_menu = wx.Menu()
+    help_menu.Append(wx.ID_HELP, "ReVoiceOver &Help\tF1", "Help for the current tab")
+    help_menu.Append(ids.help_start, "&Getting Started")
+    help_menu.Append(ids.help_keys, "&Keyboard Shortcuts")
+    help_menu.AppendSeparator()
     help_menu.Append(wx.ID_ABOUT, "&About ReVoiceOver")
     bar.Append(help_menu, "&Help")
     return bar, recent

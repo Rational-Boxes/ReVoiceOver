@@ -8,6 +8,7 @@ import numpy as np
 import wx
 
 from narration.gui import icons, theme
+from narration.gui.help_viewer import help_button
 from narration.gui.models.timeline_model import TimelineModel, format_time
 from narration.types import Unit
 
@@ -268,6 +269,7 @@ class TimelinePanel(wx.Panel):
             strip.Add(ctrl, 0, wx.RIGHT, 2)
         strip.AddSpacer(10)
         strip.Add(self.info, 1, wx.ALIGN_CENTER_VERTICAL)
+        strip.Add(help_button(self, "timeline", "the timeline"), 0, wx.ALIGN_CENTER_VERTICAL)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         sizer.Add(strip, 0, wx.EXPAND | wx.ALL, 3)

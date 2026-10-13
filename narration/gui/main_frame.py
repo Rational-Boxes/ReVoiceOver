@@ -13,6 +13,7 @@ from narration.config import read_glossary
 from narration.gui import chrome, events, icons
 from narration.gui.dialogs.new_project import NewProjectDialog
 from narration.gui.dialogs.token import TokenDialog
+from narration.gui.help_viewer import show_help
 from narration.gui.models.project_model import (
     VIDEO_EXTENSIONS,
     Project,
@@ -75,7 +76,7 @@ class MainFrame(wx.Frame):
     # ------------------------------------------------------------------ build
     def _build_statusbar(self) -> None:
         sb = self.CreateStatusBar(4)
-        sb.SetStatusWidths([-1, GAUGE_WIDTH, 170, -1])
+        sb.SetStatusWidths([-1, GAUGE_WIDTH, 200, -1])
         self.gauge = wx.Gauge(sb, range=100, style=wx.GA_HORIZONTAL | wx.GA_SMOOTH)
         self.gauge.Hide()
         sb.Bind(wx.EVT_SIZE, self._on_statusbar_size)
@@ -136,6 +137,9 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, self._on_reset_layout, id=self.ids.reset_layout)
         self.Bind(wx.EVT_MENU, self._on_token, id=self.ids.token)
         self.Bind(wx.EVT_MENU, lambda _e: chrome.show_about(self), id=wx.ID_ABOUT)
+        self.Bind(wx.EVT_MENU, lambda _e: show_help(self.help_topic()), id=wx.ID_HELP)
+        self.Bind(wx.EVT_MENU, lambda _e: show_help("getting-started"), id=self.ids.help_start)
+        self.Bind(wx.EVT_MENU, lambda _e: show_help("keyboard"), id=self.ids.help_keys)
         self.Bind(wx.EVT_CLOSE, self._on_close)
 
         self.Bind(events.EVT_STAGE_STARTED, self._on_stage_started)
@@ -226,7 +230,21 @@ class MainFrame(wx.Frame):
         bar.Enable(wx.ID_SAVE, self.script.model.dirty)
         if self.project is not None and self.script.model.loaded:
             cost = self.script.model.tts_characters() * price_per_char(self.project.config())
-            self.SetStatusText(f"TTS for whole script ≈ ${cost:.2f}", FIELD_COST)
+            self.SetStatusText(f"Script TTS ≈ ${cost:.2f}", FIELD_COST)
+
+    def help_topic(self) -> str:
+        """The help topic for whatever the user is looking at (F1)."""
+        if self.project is None:
+            return "getting-started"
+        focus = self.FindFocus()
+        for panel, topic in ((self.timeline.panel, "timeline"),
+                             (self.stages_panel, "pipeline")):
+            if focus is not None and (focus is panel or panel.IsDescendant(focus)):
+                return topic
+        page = self.notebook.GetCurrentPage()
+        return {id(self.script): "script-review", id(self.review.voice_panel): "voice",
+                id(self.review.qa_panel): "quality",
+                id(self.log_panel): "troubleshooting"}.get(id(page), "index")
 
     def _confirm_unsaved(self, action: str) -> bool:
         """Ask about unsaved script edits; returns False to abort ``action``."""

@@ -12,6 +12,7 @@ import wx
 import wx.stc as stc
 
 from narration.gui import icons, theme
+from narration.gui.help_viewer import help_button
 from narration.gui.models.timeline_model import format_time
 from narration.types import Unit
 
@@ -154,7 +155,9 @@ class UnitEditor(wx.Panel):
         top.Add(self.header, 0, wx.ALIGN_CENTER_VERTICAL)
         top.AddSpacer(12)
         top.Add(self.flag_label, 1, wx.ALIGN_CENTER_VERTICAL)
-        top.Add(self.ratio, 0, wx.ALIGN_CENTER_VERTICAL)
+        top.Add(self.ratio, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        top.Add(help_button(self, "script-review#flags", "flags and the editor"), 0,
+                wx.ALIGN_CENTER_VERTICAL)
 
         buttons = wx.BoxSizer(wx.HORIZONTAL)
         buttons.Add(self.play_btn, 0, wx.RIGHT, 6)

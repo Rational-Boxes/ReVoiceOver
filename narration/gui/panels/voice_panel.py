@@ -12,6 +12,7 @@ import wx.dataview as dv
 
 from narration import artifacts
 from narration.gui import icons
+from narration.gui.help_viewer import help_button
 from narration.gui.models.timeline_model import format_time
 from narration.stages.voice import REF_FILE, load_registry
 
@@ -71,8 +72,11 @@ class VoicePanel(wx.Panel):
         alt_row.Add(self.play_alt, 0, wx.RIGHT, 6)
         alt_row.Add(self.use_alt)
 
+        title_row = wx.BoxSizer(wx.HORIZONTAL)
+        title_row.Add(title, 1, wx.ALIGN_CENTER_VERTICAL)
+        title_row.Add(help_button(self, "voice", "voice cloning"), 0, wx.ALIGN_CENTER_VERTICAL)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(title, 0, wx.ALL, 10)
+        sizer.Add(title_row, 0, wx.EXPAND | wx.ALL, 10)
         sizer.Add(self.summary, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         sizer.Add(ref_row, 0, wx.LEFT | wx.RIGHT, 10)
         sizer.Add(hint, 0, wx.ALL, 10)

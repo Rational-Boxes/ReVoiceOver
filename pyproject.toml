@@ -33,7 +33,7 @@ narr-gui = "narration.gui.app:main"
 include = ["narration*"]
 
 [tool.setuptools.package-data]
-"narration.gui" = ["resources/icons/*.svg"]
+"narration.gui" = ["resources/icons/*.svg", "help/*.html"]
 "narration" = ["prompts/*.md"]
 
 [tool.ruff]

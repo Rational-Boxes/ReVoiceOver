@@ -1,0 +1,68 @@
+<h1>Project files &amp; settings</h1>
+
+<h2><a name="work-folder"></a>The work folder</h2>
+<p>Every project keeps its files in one folder (by default
+<tt>work/&lt;video name&gt;</tt> next to the video). Open it with
+<b>File &gt; Show Work Folder</b>.</p>
+<table border="0" cellpadding="3">
+<tr><td><tt>project.json</tt></td><td>Which video the folder belongs to</td></tr>
+<tr><td><tt>probe.json</tt>, <tt>audio_16k.wav</tt>, <tt>audio_full.wav</tt></td><td>Extracted audio</td></tr>
+<tr><td><tt>words.json</tt></td><td>Transcript with word timings</td></tr>
+<tr><td><tt>units.json</tt></td><td>Narration units</td></tr>
+<tr><td><tt>script.json</tt>, <tt>script.md</tt></td><td>The cleaned script, and a readable diff of it</td></tr>
+<tr><td><tt>voice.json</tt>, <tt>voice_ref.wav</tt></td><td>The cloned voice and its reference clip</td></tr>
+<tr><td><tt>tts/</tt>, <tt>synth.json</tt></td><td>Synthesized clips</td></tr>
+<tr><td><tt>qa.json</tt></td><td>Quality-check results</td></tr>
+<tr><td><tt>cache/</tt></td><td>Cached API results, so re-runs don't cost again</td></tr>
+<tr><td><tt>run.log</tt></td><td>A log of every run</td></tr>
+<tr><td><tt>.state/</tt></td><td>What each stage last ran on (for stale detection)</td></tr>
+</table>
+<p>You can delete the work folder to start over. The video itself is never modified.</p>
+
+<h2><a name="config"></a>Settings files</h2>
+<p>Settings are TOML files, layered from lowest to highest priority:</p>
+<ol>
+  <li><tt>~/.config/narr/config.toml</tt>: your defaults</li>
+  <li><tt>narr.toml</tt> next to the video: shared by videos in that folder</li>
+  <li><tt>narr.toml</tt> in the work folder: this video only (the New Project dialog
+      and the Voice tab write here)</li>
+</ol>
+<p>Useful settings:</p>
+<pre>
+[models]
+llm = "Qwen/Qwen3-235B-A22B-Instruct-2507"
+tts = "Zyphra/Zonos-v0.1-hybrid"
+
+[segment]
+pause_split_s = 0.6     # a pause this long ends a unit
+
+[clean]
+batch_size = 12         # units per language-model request
+
+[synth]
+speaker_rate = 15       # Zonos speaking rate, 5-35
+
+[qa]
+max_wer = 0.15
+max_retries = 3
+
+[network]
+concurrency = 6         # parallel API requests
+</pre>
+
+<h2><a name="glossary"></a>Glossary</h2>
+<p>Put a <tt>glossary.txt</tt> next to the video with one product name, acronym or
+term per line (<tt>#</tt> starts a comment):</p>
+<pre>
+# Products
+Green Canary
+LEED
+USGBC
+WELL
+</pre>
+<p>The glossary primes Whisper's spelling, tells the cleanup model to write these
+terms exactly, and highlights them in the script editor.</p>
+
+<h2><a name="pronunciations"></a>Pronunciations</h2>
+<p><tt>pronunciations.toml</tt> next to the video changes how terms are <i>spoken</i>
+without changing the script. See <a href="quality.html#pronunciations">Quality check</a>.</p>

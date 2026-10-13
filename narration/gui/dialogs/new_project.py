@@ -9,6 +9,7 @@ import wx
 
 from narration.config import load_config
 from narration.context import default_work_dir
+from narration.gui.help_viewer import show_help
 from narration.gui.models.project_model import VIDEO_EXTENSIONS
 
 _patterns = ";".join(f"*{e};*{e.upper()}" for e in VIDEO_EXTENSIONS)
@@ -54,7 +55,7 @@ class NewProjectDialog(wx.Dialog):
         sizer.Add(form, 0, wx.EXPAND | wx.ALL, 12)
         sizer.Add(hint, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 12)
         sizer.Add(self.timing, 0, wx.EXPAND | wx.ALL, 12)
-        buttons = self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL)
+        buttons = self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL | wx.HELP)
         self.FindWindowById(wx.ID_OK).SetLabel("Create")
         sizer.Add(buttons, 0, wx.EXPAND | wx.ALL, 12)
         self.SetSizerAndFit(sizer)
@@ -65,6 +66,8 @@ class NewProjectDialog(wx.Dialog):
         self.video.Bind(wx.EVT_FILEPICKER_CHANGED, self._on_video)
         self.work_dir.Bind(wx.EVT_DIRPICKER_CHANGED, self._on_work_dir)
         self.Bind(wx.EVT_BUTTON, self._on_ok, id=wx.ID_OK)
+        self.Bind(wx.EVT_BUTTON, lambda _e: show_help("getting-started#new-project"),
+                  id=wx.ID_HELP)
         if video:
             self.video.SetPath(str(video))
             self._suggest_work_dir()

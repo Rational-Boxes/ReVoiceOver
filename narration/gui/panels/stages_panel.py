@@ -9,6 +9,7 @@ import wx.dataview as dv
 
 from narration import stages
 from narration.gui import icons
+from narration.gui.help_viewer import help_button
 from narration.stages import Status
 
 REVIEW_ROW = "review"
@@ -55,7 +56,14 @@ class StagesPanel(wx.Panel):
         for key in self._rows:
             self.list.AppendItem([self._icontext(key, "missing"), ""])
 
+        header = wx.BoxSizer(wx.HORIZONTAL)
+        hint = wx.StaticText(self, label="Double-click a stage to run from it")
+        hint.SetForegroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
+        header.Add(hint, 1, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 6)
+        header.Add(help_button(self, "pipeline", "pipeline stages and their status"), 0,
+                   wx.ALIGN_CENTER_VERTICAL)
         sizer = wx.BoxSizer(wx.VERTICAL)
+        sizer.Add(header, 0, wx.EXPAND | wx.ALL, 2)
         sizer.Add(self.list, 1, wx.EXPAND)
         self.SetSizer(sizer)
 

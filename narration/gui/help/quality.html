@@ -1,0 +1,39 @@
+<h1>Quality check</h1>
+<p>Text-to-speech occasionally skips, repeats or invents words. The <b>Quality
+check</b> stage listens to every synthesized clip with Whisper
+(<tt>whisper-large-v3-turbo</tt>) and compares what it hears with the script.</p>
+
+<h2><a name="wer"></a>Word error rate</h2>
+<p>The <b>WER</b> is the share of words that differ. Case, punctuation, hyphens
+("sub-scored" vs "subscored") and ordinals ("12th" vs "12") are ignored. A clip
+<b>fails</b> when at least two words are wrong <i>and</i> the errors exceed 15% of
+its words (the default limit), or when half of it or more is wrong or missing. One word off in a short fragment is within Whisper's own noise and
+does not count.</p>
+
+<h2><a name="retries"></a>Automatic retries</h2>
+<p>A failing clip is synthesized again with different seeds (up to three times)
+and the best take is kept. Everything is cached, so running the check again costs
+nothing unless clips changed.</p>
+<p>It also flags clips with a <b>long silence</b> inside (over 1.5 s) or with
+<b>clipping</b> (distortion).</p>
+
+<h2><a name="fixing"></a>Fixing what's left</h2>
+<p>The <b>Quality</b> tab lists the clips that still fail, with what the script says
+and what Whisper heard. For each one:</p>
+<ul>
+  <li><b>Play Synthesized</b> to listen. Sometimes Whisper is wrong and the clip is fine.</li>
+  <li><b>New Take</b> for another attempt with a fresh seed.</li>
+  <li><b>Edit Text…</b> to rephrase it in the Script tab.</li>
+  <li><b>Accept Anyway</b> when it sounds right.</li>
+</ul>
+
+<h2><a name="pronunciations"></a>Acronyms and pronunciation</h2>
+<p>Voices often stumble on acronyms and version numbers (for example "AIA" or
+"LEED 5.0"). Create <tt>pronunciations.toml</tt> next to the video:</p>
+<pre>
+"AIA"      = "A I A"
+"USGBC"    = "U S G B C"
+"LEED 5.0" = "leed five point oh"
+</pre>
+<p>These spellings are only used for speech; the script and subtitles keep the
+real text. Then run <b>Synthesize</b> and <b>Quality check</b> again.</p>

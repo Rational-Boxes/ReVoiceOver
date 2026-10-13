@@ -1,0 +1,54 @@
+<h1>Getting started</h1>
+
+<h2><a name="requirements"></a>Requirements</h2>
+<ul>
+  <li><b>ffmpeg</b> and <b>ffprobe</b> on the PATH. Fedora's <tt>ffmpeg-free</tt>
+      is enough; it includes <tt>libopenh264</tt> for H.264 output.</li>
+  <li><b>wxPython</b> from your distribution (Fedora: <tt>python3-wxpython4</tt>,
+      plus <tt>python3-wxpython4-media</tt> for video preview).</li>
+  <li><b>PortAudio</b> (<tt>portaudio</tt>) for audio playback.</li>
+  <li>A <b>DeepInfra</b> account and API token.</li>
+</ul>
+
+<h2><a name="token"></a>The DeepInfra token</h2>
+<p>All speech recognition, script cleanup and voice synthesis runs on
+DeepInfra. ReVoiceOver looks for your token in this order:</p>
+<ol>
+  <li>the <tt>DEEPINFRA_TOKEN</tt> (or <tt>DEEPINFRA_KEY</tt>) environment variable;</li>
+  <li>a <tt>.env</tt> file in the current folder or one of its parents, then
+      <tt>~/.config/narr/.env</tt>. Start the app with
+      <tt>narr-gui --env-file PATH</tt> to use one specific file;</li>
+  <li>the system keyring. Use <b>Settings &gt; DeepInfra Token…</b> to store it there.</li>
+</ol>
+<table class="note"><tr><td>The token is never written to project files, config
+files or logs, and is masked in any message that might contain it.</td></tr></table>
+
+<h2><a name="new-project"></a>Creating a project</h2>
+<p>Choose <b>File &gt; New Project…</b> (Ctrl+N), or drop a video file onto the
+window. Then pick:</p>
+<ul>
+  <li><b>Video</b>: the recording to re-voice.</li>
+  <li><b>Work folder</b>: where every intermediate file is kept. The default is
+      <tt>work/&lt;video name&gt;</tt> next to the video. Because each step saves its
+      results there, you can stop at any time and pick up later.</li>
+  <li><b>Voice model</b>: the text-to-speech model. Only models that support
+      voice cloning can be used for synthesis.</li>
+  <li><b>Timing</b>: <i>Anchor</i> keeps each sentence where you originally said
+      it (best for live demos). <i>Compact</i> also removes dead air
+      (best for slide narration).</li>
+</ul>
+<p>To reopen a project, use <b>File &gt; Open Project…</b> and choose its work
+folder, or pick it from <b>Open Recent</b>.</p>
+
+<h2><a name="first-run"></a>Your first run</h2>
+<ol>
+  <li>Press <b>Run</b> (Ctrl+R). Watch the <a href="pipeline.html">Stages</a> list
+      and the <b>Log</b> tab.</li>
+  <li>When the run pauses at <b>Review script</b>, read the
+      <a href="script-review.html">Script</a> tab. Tick <b>Flagged only</b> to see what
+      needs attention first.</li>
+  <li>Press <b>Approve &amp; Continue</b> (Ctrl+Shift+R).</li>
+  <li>Check the <a href="quality.html">Quality</a> tab and listen to flagged units.</li>
+</ol>
+<p>Tip: before the first run, create a <a href="project-files.html#glossary">glossary</a>
+of product names and acronyms. It improves both the transcript and the cleanup.</p>

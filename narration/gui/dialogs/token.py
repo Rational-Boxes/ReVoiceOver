@@ -5,6 +5,7 @@ from __future__ import annotations
 import wx
 
 from narration import credentials
+from narration.gui.help_viewer import help_button
 
 SOURCE_TEXT = {
     "env": f"In use: ${credentials.ENV_VAR} from the environment (it overrides the keyring).",
@@ -29,6 +30,8 @@ class TokenDialog(wx.Dialog):
         close_btn = wx.Button(self, wx.ID_CLOSE)
 
         buttons = wx.BoxSizer(wx.HORIZONTAL)
+        buttons.Add(help_button(self, "getting-started#token", "where the token comes from"), 0,
+                    wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
         buttons.Add(self.remove_btn)
         buttons.AddStretchSpacer()
         buttons.Add(self.save_btn, 0, wx.RIGHT, 6)

@@ -9,6 +9,7 @@ import wx
 import wx.dataview as dv
 
 from narration.gui import icons
+from narration.gui.help_viewer import help_button
 from narration.gui.models.script_model import ScriptModel
 
 
@@ -42,8 +43,7 @@ class QAPanel(wx.Panel):
         self.edit_btn = wx.Button(self, label="Edit Text…")
         self.accept_btn = wx.Button(self, label="Accept Anyway")
         tip = wx.StaticText(self, label="Tip: acronyms the voice can't say (e.g. “AIA”) are best "
-                                        "fixed in pronunciations.toml next to the video, e.g. "
-                                        "AIA = \"A I A\".")
+                                        "fixed in pronunciations.toml next to the video.")
         tip.SetForegroundColour(wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
 
         buttons = wx.BoxSizer(wx.HORIZONTAL)
@@ -51,11 +51,18 @@ class QAPanel(wx.Panel):
             buttons.Add(b, 0, wx.RIGHT, 6)
         buttons.AddStretchSpacer()
         buttons.Add(self.accept_btn)
+        top = wx.BoxSizer(wx.HORIZONTAL)
+        top.Add(self.summary, 1, wx.ALIGN_CENTER_VERTICAL)
+        top.Add(help_button(self, "quality", "the quality check"), 0, wx.ALIGN_CENTER_VERTICAL)
         sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(self.summary, 0, wx.ALL, 10)
+        sizer.Add(top, 0, wx.EXPAND | wx.ALL, 10)
         sizer.Add(self.list, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
         sizer.Add(buttons, 0, wx.EXPAND | wx.ALL, 10)
-        sizer.Add(tip, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
+        tip_row = wx.BoxSizer(wx.HORIZONTAL)
+        tip_row.Add(tip, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        tip_row.Add(help_button(self, "quality#pronunciations", "pronunciation fixes"), 0,
+                    wx.ALIGN_CENTER_VERTICAL)
+        sizer.Add(tip_row, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 10)
         self.SetSizer(sizer)
 
         for btn, fn in ((self.play_btn, self.cb.play_tts), (self.take_btn, self.cb.new_take),

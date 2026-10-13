@@ -1,0 +1,36 @@
+<h1>Troubleshooting</h1>
+<p>The <b>Log</b> tab shows every step, warning and error. <b>Copy diagnostics</b>
+puts the whole log on the clipboard. The same log is written to <tt>run.log</tt> in
+the work folder.</p>
+
+<h2><a name="token"></a>"No DeepInfra token"</h2>
+<p>Set the token as described in <a href="getting-started.html#token">Getting started</a>.
+Apps started from the desktop menu don't see variables exported in your shell, so
+use the keyring or <tt>~/.config/narr/.env</tt>.</p>
+
+<h2><a name="audio"></a>"Cannot play audio"</h2>
+<p>Playback needs PortAudio and a working output device (PipeWire or PulseAudio).
+Install <tt>portaudio</tt> and check your sound settings.</p>
+
+<h2><a name="slow"></a>Synthesis is slow</h2>
+<p>DeepInfra queues TTS requests; each clip can take 10&ndash;25&nbsp;s. Raising
+<tt>[network] concurrency</tt> may help. Cancelling is safe: finished clips are cached
+and the next run continues from there.</p>
+
+<h2><a name="garbled"></a>A word is mispronounced or missing</h2>
+<p>Add it to <a href="quality.html#pronunciations">pronunciations.toml</a>, or rephrase
+the unit in the <a href="script-review.html#editor">editor</a> and make a
+<b>New Take</b>.</p>
+
+<h2><a name="wrong-terms"></a>Product names are misspelled</h2>
+<p>Add them to the <a href="project-files.html#glossary">glossary</a> and run from
+<b>Transcribe</b> (or at least from <b>Clean script</b>).</p>
+
+<h2><a name="encoder"></a>Video encoding</h2>
+<p>Re-encoding uses the first available H.264 encoder: <tt>libx264</tt>,
+<tt>libopenh264</tt> (included in Fedora's <tt>ffmpeg-free</tt>), or a hardware
+encoder. Run <tt>ffmpeg -encoders | grep 264</tt> to see what is installed.</p>
+
+<h2><a name="stale"></a>A stage keeps showing "stale"</h2>
+<p>Something it depends on changed after it ran, such as an edited script or a
+new voice reference. Run again; only changed work is redone.</p>

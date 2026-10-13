@@ -1,0 +1,53 @@
+<h1>Reviewing the script</h1>
+<p>After the <b>Clean script</b> stage the run pauses. The <b>Script</b> tab shows
+every narration unit: what you said and what will be spoken in its place.
+Nothing is synthesized until you press <b>Approve &amp; Continue</b>.</p>
+
+<h2><a name="list"></a>The unit list</h2>
+<table border="0" cellpadding="4">
+<tr><td><b>Icon</b></td><td>Red: needs attention (dropped words, or a failed quality check).
+Amber: worth a look. Green: edited by you.</td></tr>
+<tr><td><b>Unit</b></td><td>The unit id, e.g. <tt>u0042</tt>.</td></tr>
+<tr><td><b>Start</b>, <b>Slot</b></td><td>Where the unit starts in the video, and how long it has
+before the next one.</td></tr>
+<tr><td><b>Narration</b></td><td>The text that will be spoken.</td></tr>
+<tr><td><b>Length</b></td><td>Cleaned length as a share of what you said.</td></tr>
+</table>
+<p>Use the search box (text or unit id), <b>Flagged only</b> and <b>Changed only</b>
+to narrow the list. Selecting a unit also selects it on the
+<a href="timeline.html">Timeline</a>, and the other way round.</p>
+
+<h2><a name="flags"></a>What the flags mean</h2>
+<table border="0" cellpadding="4">
+<tr><td><b>dropped real words</b></td><td>The model removed a unit that had real content.
+Often right for garbled speech, sometimes a mistake. Listen and decide.</td></tr>
+<tr><td><b>dropped (filler only)</b></td><td>The unit was only "um", "uh" and the like. That part of the video becomes silent.</td></tr>
+<tr><td><b>much shorter than spoken</b></td><td>Under 40% of the original length. Check that nothing important went missing.</td></tr>
+<tr><td><b>longer than spoken</b></td><td>Over 110% of the original length. The model may have
+moved words in from a neighbouring unit, and it may not fit its slot.</td></tr>
+<tr><td><b>synthesized words don't match</b></td><td>The <a href="quality.html">quality check</a> heard something different.</td></tr>
+</table>
+
+<h2><a name="editor"></a>The editor</h2>
+<p>The lower half shows the selected unit:</p>
+<ul>
+  <li><b>As spoken</b>: the transcript, with words the cleanup removed <s>struck out</s>.</li>
+  <li><b>Narration to synthesize</b>: editable. Words the cleanup added are
+      underlined in green; <a href="project-files.html#glossary">glossary</a> terms are boxed.</li>
+  <li><b>Play Original</b> plays what you said; <b>Play Synthesized</b> plays the cloned
+      voice once it exists; <b>New Take</b> re-synthesizes just this unit.</li>
+  <li><b>clip / slot</b> compares the synthesized length with the time available, and
+      warns when the text changed after synthesis.</li>
+  <li><b>Use Raw Text</b> and <b>Revert to LLM Text</b> undo the cleanup or your edits.</li>
+  <li><b>Keep my original voice</b> marks the unit to use your real recording instead
+      of the clone (patch mode).</li>
+</ul>
+<p>Edits are committed when you move to another unit or press Ctrl+Enter. Ctrl+Z
+undoes them, and Ctrl+S saves the script. A bullet in the window title means there
+are unsaved edits. You'll be asked to save before any run.</p>
+<table class="note"><tr><td>Units are anchored to the video. Keep each unit's words in
+that unit; don't move a phrase into the next one.</td></tr></table>
+
+<h2><a name="approve"></a>Approve &amp; Continue</h2>
+<p>Saves the script and runs the remaining stages: voice, synthesis and quality
+check. Units you edited by hand are kept even if you run <b>Clean script</b> again.</p>
