@@ -84,9 +84,19 @@ class Clean(_Section):
     pronunciations: str = "pronunciations.toml"
 
 
+class Voice(_Section):
+    ref: str = Field("", description="reference clip to clone; empty = pick one automatically")
+    min_ref_s: float = 8.0
+    max_ref_s: float = 15.0
+    max_gap_s: float = Field(1.0, description="longest pause allowed inside the reference")
+
+
 class Synth(_Section):
     loudness_lufs: float = -16.0
     sample_rate: int = 44100
+    language: str = "en-us"
+    speaker_rate: float | None = Field(None, ge=5, le=35, description="Zonos rate (None: default)")
+    seed: int = 42
 
 
 class Fit(_Section):
@@ -108,6 +118,7 @@ class Config(_Section):
     transcribe: Transcribe = Transcribe()
     segment: Segment = Segment()
     clean: Clean = Clean()
+    voice: Voice = Voice()
     synth: Synth = Synth()
     fit: Fit = Fit()
     qa: QA = QA()

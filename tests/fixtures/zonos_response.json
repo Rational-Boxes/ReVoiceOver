@@ -1,0 +1,14 @@
+{
+ "request_id": "fixture",
+ "inference_status": {
+  "status": "succeeded",
+  "runtime_ms": 9810,
+  "cost": 0.00041299999999999996,
+  "tokens_generated": null,
+  "tokens_input": null
+ },
+ "input_character_length": 59,
+ "output_format": "wav",
+ "words": [],
+ "audio": "data:audio/wav;base64,UklGRg=="
+}

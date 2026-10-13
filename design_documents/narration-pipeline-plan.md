@@ -383,9 +383,14 @@ built, what was verified, and what comes next.
   segments. Tokens such as `.0` or `/workspaces` come back as separate words
   and must be joined without a space. Billing is per second of audio. A
   572 s recording cost $0.43, as reported in `inference_status.cost`.
-- Whether Zonos's speaking-rate control is exposed through DeepInfra's API or
-  only in the model's native interface. If not exposed, fall back to `atempo`.
-- Whether DeepInfra's registered voices are scoped per model (one voice_id per
-  TTS model) or shared. Affects the global voice registry design.
+- ~~Whether Zonos's speaking-rate control is exposed through DeepInfra's API~~
+  Answered in milestone 6: yes, as `speaker_rate` (5-35), alongside
+  `voice_id`, `language`, `output_format` and `seed`. Audio comes back as a
+  base64 WAV data URI (44.1 kHz mono). `words` is empty.
+- ~~Whether DeepInfra's registered voices are scoped per model~~ Answered:
+  `/v1/voices/add` takes no model, so voices belong to the account. The global
+  registry is keyed only by the reference clip's sha256. Note that
+  `Audio8-TTS-Preview-0.6b` has no `voice_id` parameter, so it cannot be a
+  cloned-voice fallback.
 - Preferred default timing mode for your typical videos: live demos favor
   `anchor`; slide narration favors `compact`.
