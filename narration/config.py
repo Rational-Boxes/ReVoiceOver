@@ -78,7 +78,7 @@ class Segment(_Section):
 
 
 class Clean(_Section):
-    batch_size: int = 40
+    batch_size: int = Field(12, ge=1, description="units per request; batches run concurrently")
     temperature: float = Field(0.1, ge=0, le=2)
     glossary: str = "glossary.txt"
     pronunciations: str = "pronunciations.toml"
@@ -171,3 +171,12 @@ def project_file(video: Path, name: str) -> Path:
     """Resolve a project-relative file name (glossary, prompts) beside the video."""
     path = Path(name).expanduser()
     return path if path.is_absolute() else video.resolve().parent / path
+
+
+def read_glossary(video: Path, cfg: Config) -> list[str]:
+    """Terms from the glossary file beside the video (one per line, # comments)."""
+    try:
+        lines = project_file(video, cfg.clean.glossary).read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        return []
+    return [t.strip() for t in lines if t.strip() and not t.lstrip().startswith("#")]

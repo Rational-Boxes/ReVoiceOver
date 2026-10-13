@@ -10,7 +10,7 @@ from narration import artifacts
 from narration.cache import FileCache, file_sha256, make_key
 from narration.clients.asr import ASRBackend, make_asr
 from narration.clients.deepinfra import DeepInfraClient
-from narration.config import project_file
+from narration.config import read_glossary
 from narration.context import RunContext
 from narration.types import Chunk, Word
 
@@ -22,13 +22,7 @@ def glossary_prompt(ctx: RunContext) -> str | None:
     """Prime Whisper with product names so it spells them right."""
     if not ctx.config.transcribe.glossary_prompt:
         return None
-    path = project_file(ctx.video, ctx.config.clean.glossary)
-    try:
-        lines = path.read_text(encoding="utf-8").splitlines()
-    except FileNotFoundError:
-        return None
-    terms = [t.strip() for t in lines if t.strip() and not t.lstrip().startswith("#")]
-    return ", ".join(terms)[:MAX_PROMPT_CHARS] or None
+    return ", ".join(read_glossary(ctx.video, ctx.config))[:MAX_PROMPT_CHARS] or None
 
 
 def merge_chunks(per_chunk: list[tuple[Chunk, list[Word]]]) -> list[Word]:

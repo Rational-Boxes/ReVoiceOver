@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, fields
+from dataclasses import asdict, dataclass, field, fields
 from typing import Any, Self
 
 
@@ -41,9 +41,12 @@ class Unit(_Serializable):
     slot_end: float  # next unit's start, or video end
     raw_text: str
     clean_text: str | None = None
+    llm_text: str | None = None  # what the clean stage produced, for "revert"
     keep_original: bool = False
     first_word: int = 0  # index into words.json
     word_count: int = 0
+    flags: list[str] = field(default_factory=list)  # review hints from the clean stage
+    edited: bool = False  # clean_text was edited by hand; re-running clean keeps it
 
     @property
     def slot(self) -> float:
