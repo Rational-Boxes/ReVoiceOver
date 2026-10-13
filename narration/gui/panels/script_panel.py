@@ -6,20 +6,38 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from xml.sax.saxutils import escape
 
 import wx
 import wx.dataview as dv
 
-from narration.gui import icons
+from narration.gui import icons, theme
 from narration.gui.help_viewer import help_button
 from narration.gui.models.script_model import ScriptModel
 from narration.gui.models.timeline_model import format_time
-from narration.gui.panels.unit_editor import EditorCallbacks, UnitEditor
+from narration.gui.panels.unit_editor import FLAG_TEXT, QA_TEXT, EditorCallbacks, UnitEditor
 from narration.stages.synth import unit_clips
 from narration.types import Unit
 
 PAGE_EMPTY, PAGE_SCRIPT = 0, 1
 COL_FLAG, COL_ID, COL_START, COL_SLOT, COL_TEXT, COL_RATIO = range(6)
+
+
+def flag_reason(flag: str) -> str:
+    if flag.startswith("qa-"):
+        return QA_TEXT.get(flag[3:], flag[3:])
+    return FLAG_TEXT.get(flag, flag)
+
+
+def narration_markup(unit: Unit, flags: list[str], severe: bool) -> str:
+    """The list's Narration cell: red for problems, amber for warnings, with the reasons."""
+    text = escape(unit.clean_text) if unit.clean_text else "<i>(dropped)</i>"
+    if not flags:
+        return text
+    colour = (theme.palette().error if severe else theme.palette().warn).GetAsString(
+        wx.C2S_HTML_SYNTAX)
+    reasons = escape(" · ".join(dict.fromkeys(flag_reason(f) for f in flags)))
+    return f'<span foreground="{colour}">{text}  <i>— {reasons}</i></span>'
 
 
 @dataclass
@@ -80,7 +98,11 @@ class ScriptPanel(wx.Panel):
         self.list.AppendTextColumn("Unit", width=62)
         self.list.AppendTextColumn("Start", width=62, align=wx.ALIGN_RIGHT)
         self.list.AppendTextColumn("Slot", width=52, align=wx.ALIGN_RIGHT)
-        self.list.AppendTextColumn("Narration", width=520)
+        # Markup, so flagged sentences can be coloured and say why they are flagged.
+        text_renderer = dv.DataViewTextRenderer()
+        text_renderer.EnableMarkup(True)
+        self.list.AppendColumn(dv.DataViewColumn("Narration", text_renderer, COL_TEXT, width=520),
+                               "string")
         self.list.AppendTextColumn("Length", width=64, align=wx.ALIGN_RIGHT)
         self.editor = UnitEditor(self.splitter, EditorCallbacks(
             commit=self._commit_text,
@@ -178,8 +200,8 @@ class ScriptPanel(wx.Panel):
         icon_text = dv.DataViewIconText("", icons.bundle(icon)) if (flags or u.edited) \
             else dv.DataViewIconText("")
         ratio = len(u.clean_text or "") / max(1, len(u.raw_text))
-        text = u.clean_text if u.clean_text else "(dropped)"
-        return [icon_text, u.id, format_time(u.start, 0.1), f"{u.slot:.1f}s", text, f"{ratio:.0%}"]
+        return [icon_text, u.id, format_time(u.start, 0.1), f"{u.slot:.1f}s",
+                narration_markup(u, flags, severe), f"{ratio:.0%}"]
 
     def _refill(self) -> None:
         selected = self.selected_id()

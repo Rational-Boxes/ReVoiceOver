@@ -101,6 +101,12 @@ def test_script_review_flow(app, tmp_path):
     assert panel.model.loaded and panel.list.GetItemCount() == 5
     assert frame.notebook.GetSelection() == 0
 
+    # Every unit is listed; a flagged one is coloured and says why.
+    from narration.gui.panels.script_panel import COL_TEXT
+    assert panel.list.GetValue(0, COL_TEXT) == "Sentence 1."
+    flagged = panel.list.GetValue(2, COL_TEXT)
+    assert "foreground=" in flagged and "dropped real words" in flagged
+
     panel.flagged_cb.SetValue(True)
     panel._refill()
     assert panel.list.GetItemCount() == 1
