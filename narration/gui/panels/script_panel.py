@@ -15,7 +15,7 @@ from narration.gui.help_viewer import help_button
 from narration.gui.models.script_model import ScriptModel
 from narration.gui.models.timeline_model import format_time
 from narration.gui.panels.unit_editor import EditorCallbacks, UnitEditor
-from narration.stages.synth import current_clips
+from narration.stages.synth import unit_clips
 from narration.types import Unit
 
 PAGE_EMPTY, PAGE_SCRIPT = 0, 1
@@ -37,7 +37,7 @@ class ScriptPanel(wx.Panel):
         super().__init__(parent)
         self.cb = callbacks
         self.model = ScriptModel()
-        self.clips: dict[str, dict[str, Any]] = {}  # synth.json entries by unit id
+        self.clips: dict[str, dict[str, Any]] = {}  # each unit's speech-group clip
         self._rows: list[str] = []
         self._selecting = False
 
@@ -132,7 +132,7 @@ class ScriptPanel(wx.Panel):
     def load_clips(self) -> None:
         if self.model.work_dir is None:
             return
-        self.clips = current_clips(self.model.work_dir)
+        self.clips = unit_clips(self.model.work_dir)
         if self.editor.unit is not None:
             self._show(self.editor.unit.id)
 

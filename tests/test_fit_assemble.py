@@ -11,7 +11,7 @@ from narration.config import load_config
 from narration.context import RunContext
 from narration.media import ffmpeg
 from narration.pipeline import Outcome, run_pipeline
-from narration.stages.assemble import format_srt_time, srt, video_filter
+from narration.stages.assemble import format_srt_time, srt, unit_cues, video_filter
 from narration.stages.fit import merge_segments, plan_anchor
 from narration.types import Unit
 
@@ -53,7 +53,11 @@ def test_stretch_shifts_everything_after_it():
 def test_srt_and_filter():
     assert format_srt_time(3725.5) == "01:02:05,500"
     entries, _ = plan_anchor([U(1, 0.5, 1.5, 2.0)], {"u0001": 1.0}, 2.0, FitConfig())
-    assert srt(entries, {"u0001": "Hello."}) == "1\n00:00:00,500 --> 00:00:01,500\nHello.\n"
+    groups = {"u0001": {"units": ["a", "b"], "unit_texts": {"a": "Hi.", "b": "Hello you."}}}
+    cues = unit_cues(entries, groups)
+    assert [(round(a, 3), round(b, 3), t) for a, b, t in cues] == [
+        (0.5, 0.731, "Hi."), (0.731, 1.5, "Hello you.")]
+    assert srt(cues[:1]) == "1\n00:00:00,500 --> 00:00:00,731\nHi.\n"
     f = video_filter([{"src_start": 0, "src_end": 1, "out_start": 0, "out_end": 1},
                       {"src_start": 1, "src_end": 2, "out_start": 1, "out_end": 3}])
     assert "setpts=PTS-STARTPTS[v0]" in f and "*2.000000" in f and "concat=n=2" in f
@@ -76,15 +80,19 @@ def test_fit_and_assemble_end_to_end(demo_video, tmp_path, stretch):
     units = [U(1, 0.5, 2.5, 3.5, "One."), U(2, 3.5, 4.0, 4.5, ""), U(3, 4.5, 6.0, 8.0, "Two.")]
     artifacts.write_json(ctx.path("script.json"), {"units": [u.to_dict() for u in units]})
     ctx.path("tts").mkdir()
-    long_clip = 4.0 if stretch else 1.5  # u0001's slot is 3 s
+    long_clip = 5.0 if stretch else 1.5  # u0001's group slot runs 0.5-4.5 s
     sf.write(ctx.path("tts", "u0001.wav"), _tts_like(long_clip), 44100)
     sf.write(ctx.path("tts", "u0003.wav"), _tts_like(1.0), 44100)
-    artifacts.write_json(ctx.path("synth.json"), {"voice_id": "v", "units": {
-        "u0001": {"file": "tts/u0001.wav", "duration": long_clip + 0.6, "chars": 4, "seed": 42,
-                  "cached": False},
-        "u0003": {"file": "tts/u0003.wav", "duration": 1.6, "chars": 4, "seed": 42,
-                  "cached": False}}})
-    artifacts.write_json(ctx.path("qa.json"), {"units": {}})
+    def group(uid, start, end, slot_end, text, seconds):
+        return {"file": f"tts/{uid}.wav", "duration": seconds + 0.6, "chars": len(text),
+                "seed": 42, "cached": False, "text": text, "units": [uid], "start": start,
+                "end": end, "slot_end": slot_end, "unit_texts": {uid: text}}
+
+    # Clips are named after their unit here; real groups are g0001...
+    artifacts.write_json(ctx.path("synth.json"), {"voice_id": "v", "groups": {
+        "u0001": group("u0001", 0.5, 2.5, 4.5, "One.", long_clip),
+        "u0003": group("u0003", 4.5, 6.0, 8.0, "Two.", 1.0)}})
+    artifacts.write_json(ctx.path("qa.json"), {"groups": {}})
 
     result = asyncio.run(run_pipeline(ctx, start="fit"))
     assert result.outcome is Outcome.COMPLETED, result.error
@@ -97,7 +105,7 @@ def test_fit_and_assemble_end_to_end(demo_video, tmp_path, stretch):
     if stretch:
         assert first["video_stretch"] > 1.0
         assert out.duration == pytest.approx(timeline["output_duration"], abs=0.25)
-        assert out.duration > 8.3  # 8.53 s planned; frame rounding at 10 fps
+        assert out.duration > 8.15  # stretched beyond the 8 s source (10 fps rounding)
     else:
         assert first["atempo"] == 1.0 and first["video_stretch"] == 1.0
         assert out.duration == pytest.approx(8.0, abs=0.25)

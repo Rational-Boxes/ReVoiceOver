@@ -32,7 +32,7 @@ class ScriptModel:
         self._undo: list[Change] = []
         self._redo: list[Change] = []
         self._index: dict[str, int] = {}
-        self.qa: dict[str, dict[str, Any]] = {}  # qa.json results by unit id
+        self.qa: dict[str, dict[str, Any]] = {}  # qa.json group result, by unit id
 
     # -- load / save -------------------------------------------------------
     @property
@@ -61,9 +61,12 @@ class ScriptModel:
         if self.work_dir is None:
             return
         try:
-            self.qa = dict(artifacts.read_json(self.work_dir / QA_FILE)["units"])
+            groups = artifacts.read_json(self.work_dir / QA_FILE)["groups"]
         except (FileNotFoundError, artifacts.SchemaError, KeyError):
-            pass
+            return
+        for gid, entry in groups.items():
+            for uid in entry.get("units", []):
+                self.qa[uid] = {**entry, "group": gid}
 
     def qa_flags(self, unit_id: str) -> list[str]:
         """Open QA problems for a unit (none once accepted)."""
@@ -78,14 +81,28 @@ class ScriptModel:
     def qa_failures(self) -> list[Unit]:
         return [u for u in self.units if self.qa_flags(u.id)]
 
+    def qa_failing_groups(self) -> list[tuple[str, dict[str, Any]]]:
+        """(group id, result) for each speech group with open QA problems, in order."""
+        seen: dict[str, dict[str, Any]] = {}
+        for u in self.qa_failures():
+            entry = self.qa[u.id]
+            seen.setdefault(entry["group"], entry)
+        return list(seen.items())
+
+    def qa_checked(self) -> int:
+        return len({e["group"] for e in self.qa.values()})
+
     def accept_qa(self, unit_id: str) -> None:
-        """Mark a QA problem as acceptable (written to qa.json right away)."""
+        """Accept the QA problem of a unit's speech group (written to qa.json right away)."""
         if self.work_dir is None or unit_id not in self.qa:
             return
+        gid = self.qa[unit_id]["group"]
         data = artifacts.read_json(self.work_dir / QA_FILE)
-        data["units"][unit_id]["accepted"] = True
+        data["groups"][gid]["accepted"] = True
         artifacts.write_json(self.work_dir / QA_FILE, data)
-        self.qa[unit_id]["accepted"] = True
+        for entry in self.qa.values():
+            if entry["group"] == gid:
+                entry["accepted"] = True
 
     def save(self) -> None:
         if self.work_dir is None:

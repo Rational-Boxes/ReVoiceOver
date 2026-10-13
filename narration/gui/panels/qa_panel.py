@@ -26,11 +26,11 @@ class QAPanel(wx.Panel):
     def __init__(self, parent: wx.Window, callbacks: QACallbacks) -> None:
         super().__init__(parent)
         self.cb = callbacks
-        self._rows: list[str] = []
+        self._rows: list[str] = []  # first unit id of each listed speech group
 
         self.summary = wx.StaticText(self)
         self.list = dv.DataViewListCtrl(self, style=dv.DV_ROW_LINES | dv.DV_SINGLE)
-        self.list.AppendTextColumn("Unit", width=62)
+        self.list.AppendTextColumn("Units", width=110)
         self.list.AppendTextColumn("WER", width=56, align=wx.ALIGN_RIGHT)
         self.list.AppendTextColumn("Tries", width=50, align=wx.ALIGN_RIGHT)
         self.list.AppendTextColumn("Problem", width=130)
@@ -78,21 +78,23 @@ class QAPanel(wx.Panel):
         selected = self.selected_id()
         self.list.DeleteAllItems()
         self._rows = []
-        failures = model.qa_failures()
-        for u in failures:
-            entry = model.qa[u.id]
-            self._rows.append(u.id)
-            self.list.AppendItem([u.id, f"{entry['wer']:.0%}", str(entry.get("retries", 0)),
-                                  ", ".join(entry.get("flags", [])), u.clean_text or "",
+        failures = model.qa_failing_groups()
+        for _gid, entry in failures:
+            units = entry["units"]
+            span = units[0] if len(units) == 1 else f"{units[0]}–{units[-1]}"
+            text = " ".join((u.clean_text or "") for uid in units if (u := model.get(uid)))
+            self._rows.append(units[0])
+            self.list.AppendItem([span, f"{entry['wer']:.0%}", str(entry.get("retries", 0)),
+                                  ", ".join(entry.get("flags", [])), text,
                                   entry.get("heard", "")])
-        checked = len(model.qa)
+        checked = model.qa_checked()
         if not checked:
             self.summary.SetLabel("Quality check has not run yet.")
         elif failures:
-            self.summary.SetLabel(f"{len(failures)} of {checked} synthesized units need a look. "
+            self.summary.SetLabel(f"{len(failures)} of {checked} speech groups need a look. "
                                   "Listen, then make a new take, change the text, or accept.")
         else:
-            self.summary.SetLabel(f"All {checked} synthesized units passed the quality check.")
+            self.summary.SetLabel(f"All {checked} speech groups passed the quality check.")
         if selected in self._rows:
             self.list.SelectRow(self._rows.index(selected))
         self._update_buttons()

@@ -1,4 +1,4 @@
-"""[6] qa: re-transcribe every synthesized clip and catch skipped/invented words.
+"""[6] qa: re-transcribe every speech group's clip and catch skipped/invented words.
 
 A clip whose word error rate against its script text exceeds ``qa.max_wer`` is
 re-synthesized with new seeds (up to ``qa.max_retries``); the best take wins.
@@ -23,8 +23,7 @@ from narration.clients.tts import make_tts
 from narration.context import RunContext
 from narration.media import ffmpeg
 from narration.media.audio import read_mono
-from narration.stages.synth import Clip, load_pronunciations, synthesize_unit
-from narration.types import Unit
+from narration.stages.synth import Clip, Group, load_pronunciations, synthesize_group
 
 STAGE = "qa"
 _PUNCT = re.compile(r"[^\w\s']")
@@ -57,6 +56,19 @@ def too_many_errors(expected: str, wer: float, max_wer: float) -> bool:
     return wer >= 0.5 or errors > max(1, int(max_wer * words))
 
 
+_ACRONYM = re.compile(r"\b[A-Z][A-Z0-9]{1,}\b")
+
+
+def missing_acronyms(expected: str, heard: str) -> list[str]:
+    """All-caps terms (AIA, USGBC, EPD) in the script that Whisper did not hear.
+
+    Voices tend to skip exactly these, and one dropped word can hide inside an
+    otherwise fine WER. Spacing and dots are ignored ("A I A", "A.I.A." count).
+    """
+    squashed = re.sub(r"[^a-z0-9]", "", heard.lower())
+    return [t for t in dict.fromkeys(_ACRONYM.findall(expected)) if t.lower() not in squashed]
+
+
 def word_error_rate(expected: str, heard: str) -> float:
     """WER, scoring hyphens both joined and split ("sub-scored" = "subscored",
     "workspace-wide" = "workspace wide") and keeping the kinder result."""
@@ -87,10 +99,12 @@ def audio_flags(ctx: RunContext, clip_path: Any) -> list[str]:
 
 async def run(ctx: RunContext) -> None:
     cfg = ctx.config
-    units = {u.id: u for u in (Unit.from_dict(d)
-                               for d in artifacts.read_json(ctx.path("script.json"))["units"])}
     synth = artifacts.read_json(ctx.path("synth.json"))
-    clips = {uid: Clip(**c) for uid, c in synth["units"].items() if uid in units}
+    entries = synth["groups"]
+    groups = {gid: Group.from_entry(gid, e) for gid, e in entries.items()}
+    clip_fields = set(Clip.__dataclass_fields__)
+    clips = {gid: Clip(**{k: v for k, v in e.items() if k in clip_fields})
+             for gid, e in entries.items()}
     voice_id = synth["voice_id"]
     pronunciations = load_pronunciations(ctx.video, cfg)
     language = (cfg.transcribe.language or cfg.synth.language.split("-")[0]) or None
@@ -114,24 +128,26 @@ async def run(ctx: RunContext) -> None:
                 cost += float((raw.get("inference_status") or {}).get("cost") or 0.0)
             return str(raw.get("text", "")).strip()
 
-        async def check(uid: str, clip: Clip) -> None:
-            unit = units[uid]
+        async def check(gid: str, clip: Clip) -> None:
+            group = groups[gid]
+            expected = group.text
             # Start from exactly the take synth.json records (an earlier QA run may
             # have left a retry take in tts/<id>.wav). A cache hit: no API call.
-            clip = await synthesize_unit(ctx, tts, unit, voice_id, pronunciations, clip.seed)
+            clip = await synthesize_group(ctx, tts, group, voice_id, pronunciations, clip.seed)
             text = await heard(ctx.path(clip.file))
-            best = Result(word_error_rate(unit.clean_text or "", text), text)
+            best = Result(word_error_rate(expected, text), text)
             best_clip = clip
             seed = clip.seed
             def bad(r: Result) -> bool:
-                return too_many_errors(unit.clean_text or "", r.wer, cfg.qa.max_wer)
+                return too_many_errors(expected, r.wer, cfg.qa.max_wer) \
+                    or bool(missing_acronyms(expected, r.heard))
 
             while bad(best) and best.retries < cfg.qa.max_retries:
                 ctx.check_cancelled()
                 seed += 1
-                take = await synthesize_unit(ctx, tts, unit, voice_id, pronunciations, seed)
+                take = await synthesize_group(ctx, tts, group, voice_id, pronunciations, seed)
                 text = await heard(ctx.path(take.file))
-                wer = word_error_rate(unit.clean_text or "", text)
+                wer = word_error_rate(expected, text)
                 best.retries += 1
                 if wer < best.wer:
                     best.wer, best.heard, best_clip = wer, text, take
@@ -140,19 +156,23 @@ async def run(ctx: RunContext) -> None:
                              if k in ("file", "duration", "seed")}
             # The last attempt overwrote tts/<id>.wav; restore the winning take (cached).
             if best.retries and best_clip.seed != seed:
-                await synthesize_unit(ctx, tts, unit, voice_id, pronunciations, best_clip.seed)
-            if bad(best):
+                await synthesize_group(ctx, tts, group, voice_id, pronunciations, best_clip.seed)
+            if too_many_errors(expected, best.wer, cfg.qa.max_wer):
                 best.flags.append("wer")
+            if missing_acronyms(expected, best.heard):
+                best.flags.append("acronym")
             best.flags += audio_flags(ctx, ctx.path(best_clip.file))
-            results[uid] = best
-            ctx.reporter.unit_updated(uid, "qa-flagged" if best.flags else "qa-ok")
-            ctx.reporter.advance(STAGE, 1, uid)
+            results[gid] = best
+            for uid in group.units:
+                ctx.reporter.unit_updated(uid, "qa-flagged" if best.flags else "qa-ok")
+            ctx.reporter.advance(STAGE, 1, gid)
 
-        await asyncio.gather(*(check(uid, c) for uid, c in clips.items()))
+        await asyncio.gather(*(check(gid, c) for gid, c in clips.items()))
 
     artifacts.write_json(ctx.path("qa.json"), {
         "model": cfg.models.asr_qa, "max_wer": cfg.qa.max_wer,
-        "units": {uid: asdict(r) for uid, r in sorted(results.items())},
+        "groups": {gid: {**asdict(r), "units": groups[gid].units}
+                   for gid, r in sorted(results.items())},
     })
     flagged = [uid for uid, r in sorted(results.items()) if r.flags]
     retried = sum(1 for r in results.values() if r.retries)

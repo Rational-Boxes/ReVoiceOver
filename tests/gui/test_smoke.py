@@ -126,9 +126,10 @@ def test_voice_and_tts_controls(app, tmp_path):
     artifacts.write_json(work / "script.json", {"units": [u.to_dict() for u in units]})
     (work / "tts").mkdir()
     sf.write(work / "tts" / "u0001.wav", np.zeros(44100, dtype=np.float32), 44100)
-    artifacts.write_json(work / "synth.json", {"units": {"u0001": {
+    artifacts.write_json(work / "synth.json", {"groups": {"g0001": {
         "file": "tts/u0001.wav", "duration": 1.5, "chars": 3, "seed": 42, "cached": False,
-        "text": "Hi."}}})
+        "text": "Hi.", "units": ["u0001"], "start": 0.0, "end": 1.0, "slot_end": 1.2,
+        "unit_texts": {"u0001": "Hi."}}}, "unit_groups": {"u0001": "g0001"}})
     artifacts.write_json(work / "voice.json", {
         "model": "Zyphra/Zonos-v0.1-hybrid", "voice_id": "v1", "ref_span": [3.0, 14.0],
         "reused": False, "candidates": [{"start": 3.0, "end": 14.0, "score": 0.9,
@@ -167,11 +168,13 @@ def test_quality_tab(app, tmp_path):
     units = [Unit(f"u000{i}", i, i + 0.8, i + 1, f"raw {i}", f"Clean {i}.", f"Clean {i}.")
              for i in range(1, 4)]
     artifacts.write_json(work / "script.json", {"units": [u.to_dict() for u in units]})
-    artifacts.write_json(work / "qa.json", {"model": "m", "max_wer": 0.15, "units": {
-        "u0001": {"wer": 0.0, "heard": "clean 1", "retries": 0, "flags": [], "take": None},
-        "u0002": {"wer": 1.0, "heard": "", "retries": 3, "flags": ["wer"], "take": None},
-        "u0003": {"wer": 0.1, "heard": "clean 3", "retries": 0, "flags": ["silence"],
-                  "take": None}}})
+    artifacts.write_json(work / "qa.json", {"model": "m", "max_wer": 0.15, "groups": {
+        "g0001": {"wer": 0.0, "heard": "clean 1", "retries": 0, "flags": [], "take": None,
+                  "units": ["u0001"]},
+        "g0002": {"wer": 1.0, "heard": "", "retries": 3, "flags": ["wer"], "take": None,
+                  "units": ["u0002"]},
+        "g0003": {"wer": 0.1, "heard": "clean 3", "retries": 0, "flags": ["silence"],
+                  "take": None, "units": ["u0003"]}}})
 
     frame = app.new_window()
     frame._attach(project)
@@ -184,7 +187,7 @@ def test_quality_tab(app, tmp_path):
     qa.list.SelectRow(0)
     frame.review.accept_qa("u0002")
     assert qa.list.GetItemCount() == 1
-    assert artifacts.read_json(work / "qa.json")["units"]["u0002"]["accepted"] is True
+    assert artifacts.read_json(work / "qa.json")["groups"]["g0002"]["accepted"] is True
     assert "u0002" not in frame.timeline.panel.model.marks
 
     frame.review.edit_unit("u0003")

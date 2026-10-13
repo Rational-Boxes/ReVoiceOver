@@ -166,7 +166,14 @@ Edit `clean_text` in `script.json`, then `narr run raw.mp4 --from voice`.
 
 ### [5] synth
 
-- For each unit with `clean_text`, call the TTS adapter.
+- **Speech groups (added after the first real run):** synthesizing each 2-3 s
+  unit separately sounded choppy, because intonation and loudness reset at every
+  fragment. Consecutive units are joined into groups: a fragment always continues
+  into the unit that completes its sentence (pause up to 3 s), sentences join
+  across pauses up to 0.8 s, and a group is at most 25 s. Each group is anchored
+  at its first unit's start, and its slot runs to the next group. On the real
+  recording, 115 units became 44 groups (median 7 s of speech).
+- For each speech group, call the TTS adapter.
 - Cache key: `sha256(model + voice_id + clean_text + params)` →
   `cache/tts/<key>.wav`. Editing one sentence re-synthesizes only that unit.
 - Normalize every clip to 44.1 kHz mono, `loudnorm` to a fixed target (for example

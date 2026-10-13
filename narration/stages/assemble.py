@@ -16,7 +16,7 @@ import soundfile as sf
 from narration import artifacts
 from narration.context import RunContext
 from narration.media import ffmpeg
-from narration.types import TimelineEntry, Unit
+from narration.types import TimelineEntry
 
 STAGE = "assemble"
 RATE = 44100
@@ -42,12 +42,25 @@ def format_srt_time(t: float) -> str:
     return f"{h:02d}:{m:02d}:{s:02d},{ms:03d}"
 
 
-def srt(entries: list[TimelineEntry], texts: dict[str, str]) -> str:
+def unit_cues(entries: list[TimelineEntry],
+              groups: dict[str, dict[str, Any]]) -> list[tuple[float, float, str]]:
+    """One caption per unit: a group's spoken time is shared out by text length."""
     cues = []
-    for n, e in enumerate(sorted(entries, key=lambda e: e.out_start), start=1):
-        cues.append(f"{n}\n{format_srt_time(e.out_start)} --> {format_srt_time(e.out_end)}\n"
-                    f"{texts[e.unit_id]}\n")
-    return "\n".join(cues)
+    for e in sorted(entries, key=lambda e: e.out_start):
+        texts = [groups[e.unit_id]["unit_texts"][u] for u in groups[e.unit_id]["units"]]
+        total = sum(len(t) for t in texts) or 1
+        t = e.out_start
+        for text in texts:
+            span = (e.out_end - e.out_start) * len(text) / total
+            if text:
+                cues.append((t, t + span, text))
+            t += span
+    return cues
+
+
+def srt(cues: list[tuple[float, float, str]]) -> str:
+    return "\n".join(f"{n}\n{format_srt_time(a)} --> {format_srt_time(b)}\n{text}\n"
+                     for n, (a, b, text) in enumerate(cues, start=1))
 
 
 def video_filter(segments: list[dict[str, Any]]) -> str:
@@ -78,15 +91,13 @@ def run(ctx: RunContext) -> None:
     entries = [TimelineEntry.from_dict(e) for e in timeline["entries"]]
     segments = timeline["segments"]
     duration = float(timeline["output_duration"])
-    units = {u["id"]: Unit.from_dict(u)
-             for u in artifacts.read_json(ctx.path("script.json"))["units"]}
+    groups = artifacts.read_json(ctx.path("synth.json"))["groups"]
     probe = artifacts.read_json(ctx.path("probe.json"))
     ctx.reporter.set_total(STAGE, int(duration) + 1)
 
     narration = ctx.path("narration.wav")
     sf.write(narration, build_track(ctx, entries, duration), RATE, subtype="PCM_16")
-    artifacts.atomic_write_text(ctx.path("clean.srt"),
-                                srt(entries, {k: u.clean_text or "" for k, u in units.items()}))
+    artifacts.atomic_write_text(ctx.path("clean.srt"), srt(unit_cues(entries, groups)))
 
     last = 0
 

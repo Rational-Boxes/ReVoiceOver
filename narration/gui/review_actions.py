@@ -59,7 +59,9 @@ class ReviewActions:
         frame = self.frame
         clip = frame.script.clips.get(unit_id)
         if clip is not None and frame.project is not None:
-            frame.timeline.play_tts(unit_id, frame.project.work_dir / clip["file"])
+            # The clip is the unit's whole speech group, so play it from the group start.
+            frame.timeline.play_tts(unit_id, frame.project.work_dir / clip["file"],
+                                    start=clip.get("start"))
 
     def new_take(self, unit_id: str) -> None:
         """Re-synthesize one unit in the background, then play it."""

@@ -29,6 +29,7 @@ QA_TEXT = {
     "wer": "synthesized words don't match",
     "silence": "long silence inside the clip",
     "clipping": "clip distorts (clipping)",
+    "acronym": "an acronym was not spoken",
 }
 
 
@@ -245,13 +246,16 @@ class UnitEditor(wx.Panel):
                 wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT))
             return
         duration = float(clip["duration"])
-        text = f"clip {duration:.1f}s / slot {unit.slot:.1f}s"
+        slot = float(clip["slot_end"]) - float(clip["start"]) if "slot_end" in clip else unit.slot
+        n = len(clip.get("units", [unit.id]))
+        text = (f"spoken with {n - 1} neighbouring unit{'s' if n > 2 else ''}: " if n > 1
+                else "") + f"clip {duration:.1f}s / slot {slot:.1f}s"
         colour = wx.SystemSettings.GetColour(wx.SYS_COLOUR_GRAYTEXT)
         if clip.get("text") and clip["text"] != unit.clean_text:
             text += " · text changed since synthesis"
             colour = wx.Colour(217, 154, 30)
-        elif duration > unit.slot:
-            text += f" · {duration / unit.slot:.0%} of slot"
+        elif duration > slot:
+            text += f" · {duration / slot:.0%} of slot"
             colour = wx.Colour(217, 154, 30)
         self.clip_info.SetLabel(text)
         self.clip_info.SetForegroundColour(colour)
@@ -270,7 +274,7 @@ class UnitEditor(wx.Panel):
         qa = self.qa
         if qa and qa.get("flags") and not qa.get("accepted"):
             flags += [QA_TEXT.get(f, f) for f in qa["flags"]]
-            if "wer" in qa["flags"]:
+            if {"wer", "acronym"} & set(qa["flags"]):
                 flags.append(f"QA heard “{qa.get('heard', '')}”")
         if self.unit.edited:
             flags.append("edited by you")

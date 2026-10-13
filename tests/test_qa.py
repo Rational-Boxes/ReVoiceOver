@@ -14,7 +14,7 @@ from narration.config import load_config
 from narration.context import RunContext
 from narration.pipeline import Outcome, run_pipeline
 from narration.stages.qa import normalize_for_wer, too_many_errors, word_error_rate
-from narration.stages.synth import current_clips
+from narration.stages.synth import current_clips, unit_clips
 from narration.types import Unit
 
 
@@ -24,6 +24,16 @@ def test_normalization():
     assert word_error_rate("Workspace wide.", "workspace-wide.") == 0.0
     assert word_error_rate("", "") == 0.0
     assert word_error_rate("AIA", "") == 1.0
+
+
+def test_missing_acronyms():
+    from narration.stages.qa import missing_acronyms
+
+    assert missing_acronyms("AIA Materials Pledge Compliance.", "materials pledge compliance") \
+        == ["AIA"]
+    assert missing_acronyms("the USGBC and A EPDs", "the U.S.G.B.C. and epds") == []
+    assert missing_acronyms("Ask the AIA", "ask the A I A") == []
+    assert missing_acronyms("No acronyms here.", "") == []
 
 
 def test_flag_rule():
@@ -52,6 +62,7 @@ def qa_ctx(tmp_path, monkeypatch):
     video.write_text("v")
     ctx = RunContext(video=video, work_dir=tmp_path / "w", config=load_config())
     ctx.config.qa.max_silence_s = 0.5  # the "It is saved." takes contain a 0.8 s gap
+    ctx.config.synth.group_sentence_gap_s = 0.0  # one unit per speech group here
     units = [Unit("u0001", 0, 2, 2.5, "open the panel", "Open the panel.", "Open the panel."),
              Unit("u0002", 2.5, 4, 5, "click deploy now", "Click deploy now.", "x"),
              Unit("u0003", 5, 7, 8, "it is saved", "It is saved.", "x")]
@@ -106,19 +117,21 @@ def test_qa_retries_keeps_best_take_and_flags(qa_ctx):
     result = asyncio.run(run_pipeline(ctx, start="qa", stop="qa"))
     assert result.outcome is Outcome.COMPLETED, result.error
 
-    qa = artifacts.read_json(ctx.path("qa.json"))["units"]
-    assert qa["u0001"]["wer"] == 0 and qa["u0001"]["flags"] == [] and qa["u0001"]["retries"] == 0
-    assert qa["u0002"]["retries"] == 1 and qa["u0002"]["take"]["seed"] == 43
-    assert qa["u0002"]["flags"] == []
-    assert qa["u0003"]["retries"] == 3 and "wer" in qa["u0003"]["flags"]
-    assert "silence" in qa["u0003"]["flags"]
+    qa = artifacts.read_json(ctx.path("qa.json"))["groups"]
+    assert qa["g0001"]["wer"] == 0 and qa["g0001"]["flags"] == [] and qa["g0001"]["retries"] == 0
+    assert qa["g0001"]["units"] == ["u0001"]
+    assert qa["g0002"]["retries"] == 1 and qa["g0002"]["take"]["seed"] == 43
+    assert qa["g0002"]["flags"] == []
+    assert qa["g0003"]["retries"] == 3 and "wer" in qa["g0003"]["flags"]
+    assert "silence" in qa["g0003"]["flags"]
 
     clips = current_clips(ctx.work_dir)
-    assert clips["u0002"]["seed"] == 43            # QA's take wins over synth.json
-    assert clips["u0001"]["seed"] == 42
+    assert clips["g0002"]["seed"] == 43            # QA's take wins over synth.json
+    assert clips["g0001"]["seed"] == 42
+    assert unit_clips(ctx.work_dir)["u0002"]["seed"] == 43
 
     # Re-running QA is free: every take and transcript is cached.
     before = dict(calls)
     asyncio.run(run_pipeline(ctx, start="qa", stop="qa"))
     assert calls == before
-    assert artifacts.read_json(ctx.path("qa.json"))["units"]["u0002"]["take"]["seed"] == 43
+    assert artifacts.read_json(ctx.path("qa.json"))["groups"]["g0002"]["take"]["seed"] == 43

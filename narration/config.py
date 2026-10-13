@@ -99,6 +99,11 @@ class Synth(_Section):
     loudness_lufs: float = -16.0
     sample_rate: int = 44100
     language: str = "en-us"
+    # Units are synthesized in speech groups (whole sentences/passages) so prosody and
+    # loudness flow; a group breaks at pauses longer than these, or at group_max_s.
+    group_sentence_gap_s: float = Field(0.8, ge=0, description="max pause between sentences")
+    group_fragment_gap_s: float = Field(3.0, ge=0, description="max pause inside a sentence")
+    group_max_s: float = Field(25.0, gt=0)
     speaker_rate: float | None = Field(None, ge=5, le=35, description="Zonos rate (None: default)")
     seed: int = 42
 

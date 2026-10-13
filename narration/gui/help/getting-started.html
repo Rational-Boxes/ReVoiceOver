@@ -10,6 +10,19 @@
   <li>A <b>DeepInfra</b> account and API token.</li>
 </ul>
 
+<h2><a name="starting"></a>Starting the app</h2>
+<p>Run <tt>./revoiceover.sh</tt> from the project folder. On the first run it creates
+a Python environment and installs the app; after that it starts straight away. You can
+pass a video or a project work folder to open it directly, and link the script into
+<tt>~/.local/bin</tt> to start it from anywhere:</p>
+<pre>
+./revoiceover.sh
+./revoiceover.sh ~/Videos/demo.mp4
+ln -s "$PWD/revoiceover.sh" ~/.local/bin/revoiceover
+</pre>
+<p>If no token is set in the environment, the launcher uses the <tt>.env</tt> file next
+to it.</p>
+
 <h2><a name="token"></a>The DeepInfra token</h2>
 <p>All speech recognition, script cleanup and voice synthesis runs on
 DeepInfra. ReVoiceOver looks for your token in this order:</p>

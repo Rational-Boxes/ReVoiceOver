@@ -72,11 +72,12 @@ class TimelineController(wx.EvtHandler):
             return
         self.play_file(self.work_dir / "audio_full.wav", unit.start, unit.end)
 
-    def play_tts(self, unit_id: str, clip: Path) -> None:
-        """Play a synthesized clip; the playhead runs from the unit's start."""
+    def play_tts(self, unit_id: str, clip: Path, start: float | None = None) -> None:
+        """Play a synthesized clip; the playhead runs from ``start`` (default: the unit's)."""
         unit = self.unit(unit_id)
         if unit is not None:
-            self.play_file(clip, 0.0, None, timeline_start=unit.start)
+            self.play_file(clip, 0.0, None,
+                           timeline_start=unit.start if start is None else start)
 
     def play_span(self, start: float, end: float) -> None:
         if self.work_dir is not None:

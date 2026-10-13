@@ -106,8 +106,10 @@ def test_voice_then_synth(tts_ctx):
     assert load_registry()[voice["ref_sha256"]]["voice_id"] == "v123"
 
     synth = artifacts.read_json(ctx.path("synth.json"))
-    assert list(synth["units"]) == ["u0001"]  # dropped unit is not synthesized
-    clip = synth["units"]["u0001"]
+    assert list(synth["groups"]) == ["g0001"]
+    assert synth["groups"]["g0001"]["units"] == ["u0001"]  # dropped unit is not spoken
+    assert synth["unit_groups"] == {"u0001": "g0001"}
+    clip = synth["groups"]["g0001"]
     assert clip["duration"] == pytest.approx(1.5, abs=0.05)
     assert ctx.path(clip["file"]).exists()
     assert calls.count("/v1/voices/add") == 1
@@ -117,3 +119,30 @@ def test_voice_then_synth(tts_ctx):
     assert calls.count("/v1/voices/add") == 1
     assert len([c for c in calls if "Zonos" in c]) == 1
     assert artifacts.read_json(ctx.path("voice.json"))["reused"] is True
+
+
+def test_plan_groups_follows_sentences_and_pauses():
+    from narration.config import Synth as SynthConfig
+    from narration.stages.synth import plan_groups
+
+    def unit(i, start, end, text):
+        return Unit(f"u{i:04d}", start, end, end + 0.1, "raw", text, text)
+
+    units = [
+        unit(1, 0.0, 2.0, "We retain the login screen with"),   # fragment ...
+        unit(2, 4.5, 6.0, "all your workspaces."),             # ... 2.5 s later: joined
+        unit(3, 6.5, 8.0, "It is fast."),                      # 0.5 s after a sentence
+        unit(4, 9.5, 11.0, "Now open a project."),             # 1.5 s after a sentence
+        unit(5, 11.2, 11.6, ""),                               # dropped
+        unit(6, 11.7, 14.0, "Then click deploy."),       # 0.7 s after a sentence
+        unit(7, 30.0, 32.0, "Done."),
+    ]
+    units[-1].slot_end = 40.0
+    groups = plan_groups(units, SynthConfig())
+    assert [g.units for g in groups] == [["u0001", "u0002", "u0003"], ["u0004", "u0006"],
+                                         ["u0007"]]
+    assert groups[0].text == "We retain the login screen with all your workspaces. It is fast."
+    assert [(g.start, g.slot_end) for g in groups] == [(0.0, 9.5), (9.5, 30.0), (30.0, 40.0)]
+
+    capped = plan_groups(units, SynthConfig(group_max_s=5.0))
+    assert all(g.end - g.start <= 5.0 for g in capped)

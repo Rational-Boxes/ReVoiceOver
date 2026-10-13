@@ -1,7 +1,7 @@
-"""[7] fit: make every clip fit its slot, and plan the output timeline.
+"""[7] fit: make every speech group's clip fit its slot; plan the output timeline.
 
-``anchor`` timing (the default) starts each unit exactly where the original
-speech started. A clip that is too long is first sped up (up to
+``anchor`` timing (the default) starts each speech group exactly where the
+original speech started. A clip that is too long is first sped up (up to
 ``fit.max_atempo``); whatever still does not fit is made room for by slowing
 that slice of video down. Writes fitted/<id>.wav and timeline.json.
 """
@@ -81,9 +81,11 @@ def merge_segments(segments: list[Segment]) -> list[Segment]:
 
 
 def trim_filter(cfg: FitConfig) -> str:
-    """Remove leading and trailing silence, keeping 30 ms of air at each end."""
+    """Remove leading/trailing silence (keeping 30 ms of air), then fade the edges
+    over 15 ms so clips never start or stop with a click."""
     edge = f"silenceremove=start_periods=1:start_threshold={cfg.trim_db}dB:start_silence=0.03"
-    return f"{edge},areverse,{edge},areverse"
+    fade = "afade=t=in:d=0.015"
+    return f"{edge},{fade},areverse,{edge},{fade},areverse"
 
 
 def atempo_filter(factor: float) -> str:
@@ -98,11 +100,15 @@ def run(ctx: RunContext) -> None:
     units = [Unit.from_dict(u) for u in artifacts.read_json(ctx.path("script.json"))["units"]]
     clips = current_clips(ctx.work_dir)
     duration = float(artifacts.read_json(ctx.path("probe.json"))["format"]["duration"])
-    voiced = [u for u in units if u.clean_text and u.id in clips]
-    missing = [u.id for u in units if u.clean_text and u.id not in clips]
+    covered = {uid for entry in clips.values() for uid in entry["units"]}
+    missing = [u.id for u in units if u.clean_text and u.id not in covered]
     if missing:
         raise RuntimeError(f"{len(missing)} unit(s) have text but no clip "
                            f"({', '.join(missing[:5])}); run Synthesize first")
+    # Each speech group is placed like one big unit spanning its slot.
+    voiced = sorted((Unit(id=gid, start=e["start"], end=e["end"], slot_end=e["slot_end"],
+                          raw_text="", clean_text=e["text"]) for gid, e in clips.items()),
+                    key=lambda g: g.start)
 
     out_dir = ctx.path(FITTED_DIR)
     out_dir.mkdir(exist_ok=True)
@@ -120,7 +126,7 @@ def run(ctx: RunContext) -> None:
         trimmed[u.id] = ffmpeg.probe(tmp).duration
         ctx.reporter.advance(STAGE, 1, u.id)
 
-    entries, segments = plan_anchor(units, trimmed, duration, cfg.fit)
+    entries, segments = plan_anchor(voiced, trimmed, duration, cfg.fit)
 
     # Pass 2: apply speed-ups.
     for e in entries:
