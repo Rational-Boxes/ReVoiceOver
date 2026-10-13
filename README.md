@@ -14,6 +14,8 @@ under a dollar.
 It comes as a wxPython desktop app (`narr-gui`) and a command-line tool (`narr`).
 Both share the same pipeline and the same project folders.
 
+![The ReVoiceOver workbench: pipeline stages, the script under review with flagged units, the unit editor, and the timeline](design_documents/workbench.png)
+
 ## How it works
 
 ```
