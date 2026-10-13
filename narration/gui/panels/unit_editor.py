@@ -24,6 +24,11 @@ FLAG_TEXT = {
     "short": "much shorter than spoken",
     "long": "longer than spoken — may not fit its slot",
 }
+QA_TEXT = {
+    "wer": "synthesized words don't match",
+    "silence": "long silence inside the clip",
+    "clipping": "clip distorts (clipping)",
+}
 
 
 def _key(word: str) -> str:
@@ -110,7 +115,8 @@ class UnitEditor(wx.Panel):
         super().__init__(parent)
         self.cb = callbacks
         self.unit: Unit | None = None
-        self.clip: dict[str, Any] | None = None  # synth.json entry for this unit
+        self.clip: dict[str, Any] | None = None  # current take for this unit
+        self.qa: dict[str, Any] | None = None    # qa.json entry for this unit
         self.busy = False
         self.glossary: list[str] = []
         self._loading = False
@@ -190,9 +196,11 @@ class UnitEditor(wx.Panel):
         self.show(None)
 
     # -- display -----------------------------------------------------------
-    def show(self, unit: Unit | None, clip: dict[str, Any] | None = None) -> None:
+    def show(self, unit: Unit | None, clip: dict[str, Any] | None = None,
+             qa: dict[str, Any] | None = None) -> None:
         self.unit = unit
         self.clip = clip
+        self.qa = qa
         self._loading = True
         try:
             self.raw.SetReadOnly(False)
@@ -256,6 +264,11 @@ class UnitEditor(wx.Panel):
         ratio = len(clean.strip()) / max(1, len(raw))
         self.ratio.SetLabel(f"length {ratio:.0%} of spoken")
         flags = [FLAG_TEXT.get(f, f) for f in self.unit.flags]
+        qa = self.qa
+        if qa and qa.get("flags") and not qa.get("accepted"):
+            flags += [QA_TEXT.get(f, f) for f in qa["flags"]]
+            if "wer" in qa["flags"]:
+                flags.append(f"QA heard “{qa.get('heard', '')}”")
         if self.unit.edited:
             flags.append("edited by you")
         self.flag_label.SetLabel("  ·  ".join(flags))

@@ -11,6 +11,7 @@ from narration.stages.clean import flags_for, normalize, script_markdown
 from narration.types import Unit
 
 SCRIPT = "script.json"
+QA_FILE = "qa.json"
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class ScriptModel:
         self._undo: list[Change] = []
         self._redo: list[Change] = []
         self._index: dict[str, int] = {}
+        self.qa: dict[str, dict[str, Any]] = {}  # qa.json results by unit id
 
     # -- load / save -------------------------------------------------------
     @property
@@ -50,7 +52,40 @@ class ScriptModel:
         self.dirty = False
         self._undo.clear()
         self._redo.clear()
+        self.load_qa()
         return bool(self.units)
+
+    # -- QA ----------------------------------------------------------------
+    def load_qa(self) -> None:
+        self.qa = {}
+        if self.work_dir is None:
+            return
+        try:
+            self.qa = dict(artifacts.read_json(self.work_dir / QA_FILE)["units"])
+        except (FileNotFoundError, artifacts.SchemaError, KeyError):
+            pass
+
+    def qa_flags(self, unit_id: str) -> list[str]:
+        """Open QA problems for a unit (none once accepted)."""
+        entry = self.qa.get(unit_id)
+        if not entry or entry.get("accepted"):
+            return []
+        return [f"qa-{f}" for f in entry.get("flags", [])]
+
+    def all_flags(self, unit: Unit) -> list[str]:
+        return [*unit.flags, *self.qa_flags(unit.id)]
+
+    def qa_failures(self) -> list[Unit]:
+        return [u for u in self.units if self.qa_flags(u.id)]
+
+    def accept_qa(self, unit_id: str) -> None:
+        """Mark a QA problem as acceptable (written to qa.json right away)."""
+        if self.work_dir is None or unit_id not in self.qa:
+            return
+        data = artifacts.read_json(self.work_dir / QA_FILE)
+        data["units"][unit_id]["accepted"] = True
+        artifacts.write_json(self.work_dir / QA_FILE, data)
+        self.qa[unit_id]["accepted"] = True
 
     def save(self) -> None:
         if self.work_dir is None:
@@ -74,7 +109,7 @@ class ScriptModel:
         q = query.strip().lower()
         out = []
         for u in self.units:
-            if flagged_only and not u.flags:
+            if flagged_only and not self.all_flags(u):
                 continue
             if changed_only and normalize(u.clean_text or "") == normalize(u.raw_text):
                 continue
@@ -87,7 +122,7 @@ class ScriptModel:
     def stats(self) -> dict[str, int]:
         return {
             "units": len(self.units),
-            "flagged": sum(1 for u in self.units if u.flags),
+            "flagged": sum(1 for u in self.units if self.all_flags(u)),
             "edited": sum(1 for u in self.units if u.edited),
             "changed": sum(1 for u in self.units
                            if normalize(u.clean_text or "") != normalize(u.raw_text)),

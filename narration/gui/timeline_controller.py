@@ -45,6 +45,10 @@ class TimelineController(wx.EvtHandler):
         self.units = _load_units(work_dir)
         self.panel.set_data(duration, peaks, self.units)
 
+    def set_marks(self, marks: dict[str, str]) -> None:
+        self.panel.model.marks = marks
+        self.panel.canvas.Refresh()
+
     def refresh_units(self, units: list[Unit]) -> None:
         """Show edited script units (same ids and timing) without reloading audio."""
         if units:

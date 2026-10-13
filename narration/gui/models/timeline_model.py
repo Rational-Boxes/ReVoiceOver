@@ -24,6 +24,7 @@ class TimelineModel:
     offset: float = 0.0        # seconds at the left edge
     width: int = 1             # viewport width in px
     selected: str | None = None
+    marks: dict[str, str] = field(default_factory=dict)  # unit id -> "warn" | "error"
 
     def __post_init__(self) -> None:
         self._starts: list[float] = [u.start for u in self.units]

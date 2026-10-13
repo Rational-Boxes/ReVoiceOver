@@ -131,8 +131,19 @@ class ScriptPanel(wx.Panel):
             return
         self.clips = current_clips(self.model.work_dir)
         if self.editor.unit is not None:
-            self.editor.show(self.model.get(self.editor.unit.id),
-                             self.clips.get(self.editor.unit.id))
+            self._show(self.editor.unit.id)
+
+    def _show(self, unit_id: str) -> None:
+        self.editor.show(self.model.get(unit_id), self.clips.get(unit_id),
+                         self.model.qa.get(unit_id))
+
+    def reload_results(self) -> None:
+        """Pick up new synth/QA results without touching unsaved script edits."""
+        self.model.load_qa()
+        self.load_clips()
+        for uid in self._rows:
+            self._refresh_row(uid)
+        self._update_stats()
 
     def save(self) -> None:
         self.editor.commit()
@@ -152,9 +163,10 @@ class ScriptPanel(wx.Panel):
 
     # -- list --------------------------------------------------------------
     def _row_values(self, u: Unit) -> list[object]:
-        icon = "failed" if "dropped-content" in u.flags else \
-            "stale" if u.flags else "done" if u.edited else "missing"
-        icon_text = dv.DataViewIconText("", icons.bundle(icon)) if (u.flags or u.edited) \
+        flags = self.model.all_flags(u)
+        severe = "dropped-content" in flags or any(f.startswith("qa-") for f in flags)
+        icon = "failed" if severe else "stale" if flags else "done" if u.edited else "missing"
+        icon_text = dv.DataViewIconText("", icons.bundle(icon)) if (flags or u.edited) \
             else dv.DataViewIconText("")
         ratio = len(u.clean_text or "") / max(1, len(u.raw_text))
         text = u.clean_text if u.clean_text else "(dropped)"
@@ -216,7 +228,7 @@ class ScriptPanel(wx.Panel):
         finally:
             self._selecting = False
         self.editor.commit()
-        self.editor.show(self.model.get(unit_id), self.clips.get(unit_id))
+        self._show(unit_id)
 
     def move(self, step: int) -> None:
         row = self.list.GetSelectedRow()
@@ -230,8 +242,10 @@ class ScriptPanel(wx.Panel):
             return
         self.editor.commit()
         unit_id = self.selected_id()
-        self.editor.show(self.model.get(unit_id) if unit_id else None,
-                         self.clips.get(unit_id) if unit_id else None)
+        if unit_id:
+            self._show(unit_id)
+        else:
+            self.editor.show(None)
         if unit_id:
             self.cb.select(unit_id)
 
@@ -260,7 +274,7 @@ class ScriptPanel(wx.Panel):
             return
         self._refresh_row(unit_id)
         if self.editor.unit is not None and self.editor.unit.id == unit_id:
-            self.editor.show(self.model.get(unit_id), self.clips.get(unit_id))
+            self._show(unit_id)
         self._update_stats()
         self.cb.changed()
 

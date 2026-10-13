@@ -146,6 +146,11 @@ class TimelineCanvas(wx.Window):
             else:
                 gc.SetBrush(wx.Brush(pal.unit))
             gc.DrawRoundedRectangle(x0, top, max(2.0, x1 - x0), height, 3)
+            mark = m.marks.get(unit.id)
+            if mark and unit.id != m.selected:
+                gc.SetPen(wx.Pen(pal.error if mark == "error" else pal.warn, 2))
+                gc.SetBrush(wx.TRANSPARENT_BRUSH)
+                gc.DrawRoundedRectangle(x0 - 1, top - 1, max(2.0, x1 - x0) + 2, height + 2, 3)
             if unit.id == m.selected:
                 gc.SetPen(wx.Pen(pal.selected, 2))
                 gc.SetBrush(wx.TRANSPARENT_BRUSH)

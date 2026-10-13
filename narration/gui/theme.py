@@ -20,6 +20,8 @@ class Palette:
     selected: wx.Colour
     selected_band: wx.Colour
     playhead: wx.Colour
+    warn: wx.Colour
+    error: wx.Colour
 
 
 def is_dark() -> bool:
@@ -40,6 +42,8 @@ def palette() -> Palette:
             selected=wx.Colour(245, 190, 70),
             selected_band=wx.Colour(245, 190, 70, 40),
             playhead=wx.Colour(240, 84, 84),
+            warn=wx.Colour(230, 170, 60),
+            error=wx.Colour(240, 84, 84),
         )
     return Palette(
         background=wx.Colour(250, 250, 251),
@@ -53,4 +57,6 @@ def palette() -> Palette:
         selected=wx.Colour(214, 140, 20),
         selected_band=wx.Colour(214, 140, 20, 36),
         playhead=wx.Colour(214, 69, 69),
+        warn=wx.Colour(200, 130, 10),
+        error=wx.Colour(214, 69, 69),
     )

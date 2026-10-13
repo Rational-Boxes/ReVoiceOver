@@ -147,8 +147,46 @@ def test_voice_and_tts_controls(app, tmp_path):
     frame.select_unit("u0002")
     assert not frame.script.editor.take_btn.IsEnabled()  # dropped: nothing to synthesize
 
-    vp = frame.voice_panel
+    vp = frame.review.voice_panel
     assert "Voice v1" in vp.summary.GetLabel()
     assert vp.alts.GetItemCount() == 1
     assert "TTS for whole script" in frame.GetStatusBar().GetStatusText(2)
     frame.script.model.dirty = False
+
+
+
+def test_quality_tab(app, tmp_path):
+    from narration import artifacts
+    from narration.gui.models.project_model import Project
+    from narration.types import Unit
+
+    video = tmp_path / "talk.mp4"
+    video.write_text("v")
+    project = Project.create(video, tmp_path / "work")
+    work = project.work_dir
+    units = [Unit(f"u000{i}", i, i + 0.8, i + 1, f"raw {i}", f"Clean {i}.", f"Clean {i}.")
+             for i in range(1, 4)]
+    artifacts.write_json(work / "script.json", {"units": [u.to_dict() for u in units]})
+    artifacts.write_json(work / "qa.json", {"model": "m", "max_wer": 0.15, "units": {
+        "u0001": {"wer": 0.0, "heard": "clean 1", "retries": 0, "flags": [], "take": None},
+        "u0002": {"wer": 1.0, "heard": "", "retries": 3, "flags": ["wer"], "take": None},
+        "u0003": {"wer": 0.1, "heard": "clean 3", "retries": 0, "flags": ["silence"],
+                  "take": None}}})
+
+    frame = app.new_window()
+    frame._attach(project)
+    qa = frame.review.qa_panel
+    assert qa.list.GetItemCount() == 2
+    assert "2 of 3" in qa.summary.GetLabel()
+    assert frame.timeline.panel.model.marks == {"u0002": "error", "u0003": "error"}
+    assert frame.script.model.stats()["flagged"] == 2
+
+    qa.list.SelectRow(0)
+    frame.review.accept_qa("u0002")
+    assert qa.list.GetItemCount() == 1
+    assert artifacts.read_json(work / "qa.json")["units"]["u0002"]["accepted"] is True
+    assert "u0002" not in frame.timeline.panel.model.marks
+
+    frame.review.edit_unit("u0003")
+    assert frame.script.selected_id() == "u0003"
+    assert "long silence" in frame.script.editor.flag_label.GetLabel()
