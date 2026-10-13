@@ -67,6 +67,7 @@ GUI, and the CLI uses them too.
    ```python
    class ProgressReporter(Protocol):
        def stage_started(self, stage: str, total: int | None) -> None: ...
+       def set_total(self, stage: str, total: int | None) -> None: ...
        def advance(self, stage: str, n: int = 1, detail: str = "") -> None: ...
        def unit_updated(self, unit_id: str, status: str) -> None: ...
        def log(self, level: int, msg: str) -> None: ...
@@ -244,6 +245,8 @@ narration/
     ├── runner.py            # PipelineRunner: worker thread + asyncio loop + cancel
     ├── events.py            # custom wx event types + WxReporter
     ├── theme.py             # light/dark palette for custom-drawn widgets
+    ├── icons.py             # bundled SVGs -> wx.BitmapBundle
+    ├── welcome.py           # empty-window page (new/open/drop a video)
     ├── audio_player.py      # sounddevice playback of file slices, playhead callback
     ├── models/              # NO wx imports — unit-testable
     │   ├── project_model.py # work dir, stage statuses, config, dirty tracking

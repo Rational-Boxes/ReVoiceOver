@@ -1,0 +1,156 @@
+"""Layered configuration.
+
+Layers, lowest to highest precedence:
+
+1. built-in defaults (the pydantic models below)
+2. user config:        ~/.config/narr/config.toml
+3. project config:     narr.toml next to the source video
+4. per-video config:   <work_dir>/narr.toml (written by the GUI)
+
+The API token is *not* configuration; see ``credentials.py``.
+"""
+
+from __future__ import annotations
+
+import os
+import tomllib
+from pathlib import Path
+from typing import Any, Literal
+
+import tomli_w
+from pydantic import BaseModel, ConfigDict, Field
+
+CONFIG_NAME = "narr.toml"
+
+
+def user_config_dir() -> Path:
+    base = os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config"
+    return Path(base) / "narr"
+
+
+class _Section(BaseModel):
+    model_config = ConfigDict(extra="forbid", validate_assignment=True)
+
+
+class Models(_Section):
+    asr_timestamped: str = "openai/whisper-timestamped-medium"
+    asr_text: str = Field("openai/whisper-large", description='"" disables the text pass')
+    llm: str = "Qwen/Qwen3-235B-A22B-Instruct-2507"
+    tts: str = "Zyphra/Zonos-v0.1-hybrid"
+    tts_alternate: str = "Audio8/Audio8-TTS-Preview-0.6b"
+
+
+class Prices(_Section):
+    """USD per 1M characters, used only for the GUI cost estimate."""
+
+    tts_per_mchar: dict[str, float] = {
+        "Zyphra/Zonos-v0.1-hybrid": 7.0,
+        "Audio8/Audio8-TTS-Preview-0.6b": 5.0,
+    }
+
+
+class Network(_Section):
+    concurrency: int = Field(6, ge=1, le=32)
+    max_retries: int = Field(5, ge=0)
+    timeout_s: float = Field(120.0, gt=0)
+
+
+class Extract(_Section):
+    chunk_s: float = Field(600.0, gt=30, description="target ASR chunk length")
+    chunk_search_s: float = Field(60.0, ge=0, description="look this far for a silence")
+    silence_db: float = -35.0
+    silence_min_s: float = 0.4
+
+
+class Segment(_Section):
+    pause_split_s: float = 0.6
+    max_unit_s: float = 20.0
+
+
+class Clean(_Section):
+    batch_size: int = 40
+    temperature: float = Field(0.1, ge=0, le=2)
+    glossary: str = "glossary.txt"
+    pronunciations: str = "pronunciations.toml"
+
+
+class Synth(_Section):
+    loudness_lufs: float = -16.0
+    sample_rate: int = 44100
+
+
+class Fit(_Section):
+    timing: Literal["anchor", "compact"] = "anchor"
+    max_atempo: float = 1.15
+    compact_gap_s: float = 0.35
+
+
+class QA(_Section):
+    max_wer: float = 0.15
+    max_retries: int = 3
+
+
+class Config(_Section):
+    models: Models = Models()
+    prices: Prices = Prices()
+    network: Network = Network()
+    extract: Extract = Extract()
+    segment: Segment = Segment()
+    clean: Clean = Clean()
+    synth: Synth = Synth()
+    fit: Fit = Fit()
+    qa: QA = QA()
+
+
+def _deep_merge(base: dict[str, Any], over: dict[str, Any]) -> dict[str, Any]:
+    out = dict(base)
+    for key, value in over.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = _deep_merge(out[key], value)
+        else:
+            out[key] = value
+    return out
+
+
+def _read_toml(path: Path) -> dict[str, Any]:
+    if not path.is_file():
+        return {}
+    with path.open("rb") as fh:
+        return tomllib.load(fh)
+
+
+def config_layers(video: Path | None, work_dir: Path | None) -> list[Path]:
+    """Config files in increasing precedence (missing files included)."""
+    layers = [user_config_dir() / "config.toml"]
+    if video is not None:
+        layers.append(video.resolve().parent / CONFIG_NAME)
+    if work_dir is not None:
+        layers.append(work_dir / CONFIG_NAME)
+    return layers
+
+
+def load_config(video: Path | None = None, work_dir: Path | None = None) -> Config:
+    merged: dict[str, Any] = {}
+    for path in config_layers(video, work_dir):
+        merged = _deep_merge(merged, _read_toml(path))
+    return Config.model_validate(merged)
+
+
+def _diff(values: dict[str, Any], base: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key, value in values.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            sub = _diff(value, base[key])
+            if sub:
+                out[key] = sub
+        elif base.get(key) != value:
+            out[key] = value
+    return out
+
+
+def save_overrides(path: Path, cfg: Config, base: Config) -> None:
+    """Write only the keys of ``cfg`` that differ from ``base`` to ``path``."""
+    from narration.artifacts import atomic_write_bytes
+
+    diff = _diff(cfg.model_dump(), base.model_dump())
+    atomic_write_bytes(path, tomli_w.dumps(diff).encode())
