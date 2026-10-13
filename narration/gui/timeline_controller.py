@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 
 import numpy as np
@@ -17,9 +18,11 @@ PLAYHEAD_MS = 33
 
 
 class TimelineController(wx.EvtHandler):
-    def __init__(self, parent: wx.Window, infobar: wx.InfoBar) -> None:
+    def __init__(self, parent: wx.Window, infobar: wx.InfoBar,
+                 on_select: Callable[[str], None]) -> None:
         super().__init__()
-        self.panel = TimelinePanel(parent, self.select, self.play, self.stop)
+        # Clicks go to the frame first so the script list follows the selection.
+        self.panel = TimelinePanel(parent, on_select, self.play, self.stop)
         self.infobar = infobar
         self.player = AudioPlayer()
         self.units: list[Unit] = []
@@ -38,11 +41,16 @@ class TimelineController(wx.EvtHandler):
                 peaks = load_peaks(work_dir, work_dir / "audio_16k.wav")
         except (FileNotFoundError, KeyError, artifacts.SchemaError):
             pass
-        try:
-            self.units = [Unit.from_dict(u) for u in artifacts.read_json(work_dir / "units.json")]
-        except (FileNotFoundError, artifacts.SchemaError):
-            self.units = []
+        self.units = _load_units(work_dir)
         self.panel.set_data(duration, peaks, self.units)
+
+    def refresh_units(self, units: list[Unit]) -> None:
+        """Show edited script units (same ids and timing) without reloading audio."""
+        if units:
+            self.units = units
+            self.panel.model.set_units(units)
+            self.panel.canvas.Refresh()
+            self.panel.set_selected_info(self.panel.model.selected_unit())
 
     def select(self, unit_id: str) -> None:
         self.panel.select(unit_id)
@@ -74,3 +82,14 @@ class TimelineController(wx.EvtHandler):
         self.panel.set_playhead(t)
         if t is None:
             self.timer.Stop()
+
+
+def _load_units(work_dir: Path) -> list[Unit]:
+    """Script units (with clean text) when the script exists, else segmented units."""
+    for name, key in (("script.json", "units"), ("units.json", None)):
+        try:
+            data = artifacts.read_json(work_dir / name)
+        except (FileNotFoundError, artifacts.SchemaError):
+            continue
+        return [Unit.from_dict(u) for u in (data[key] if key else data)]
+    return []

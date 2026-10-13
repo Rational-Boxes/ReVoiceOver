@@ -139,7 +139,12 @@ class TimelineCanvas(wx.Window):
             gc.SetPen(wx.NullPen)
             gc.SetBrush(wx.Brush(pal.slot))
             gc.DrawRectangle(x1, top + height * 0.3, max(0.0, xs - x1 - 1), height * 0.4)
-            gc.SetBrush(wx.Brush(pal.unit))
+            dropped = unit.clean_text == ""  # cleaned away: nothing will be spoken here
+            if dropped:
+                gc.SetPen(wx.Pen(pal.unit, 1, wx.PENSTYLE_SHORT_DASH))
+                gc.SetBrush(wx.TRANSPARENT_BRUSH)
+            else:
+                gc.SetBrush(wx.Brush(pal.unit))
             gc.DrawRoundedRectangle(x0, top, max(2.0, x1 - x0), height, 3)
             if unit.id == m.selected:
                 gc.SetPen(wx.Pen(pal.selected, 2))
@@ -147,9 +152,9 @@ class TimelineCanvas(wx.Window):
                 gc.DrawRoundedRectangle(x0 - 1, top - 1, max(2.0, x1 - x0) + 2, height + 2, 3)
             label_w = x1 - x0 - 8
             if label_w > 24:
-                gc.SetFont(font, pal.unit_text)
+                gc.SetFont(font, pal.ruler_text if dropped else pal.unit_text)
                 gc.Clip(x0 + 4, top, label_w, height)
-                text = unit.clean_text or unit.raw_text
+                text = "(dropped)" if dropped else unit.clean_text or unit.raw_text
                 th = gc.GetTextExtent(text)[1]
                 gc.DrawText(text, x0 + 4, top + (height - th) / 2)
                 gc.ResetClip()

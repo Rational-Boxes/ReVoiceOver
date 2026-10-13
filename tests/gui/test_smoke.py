@@ -60,3 +60,50 @@ def test_open_project_and_run_extract(app, demo_video, tmp_path):
     assert model.duration == pytest.approx(8.0, abs=0.2)
     assert model.peaks.shape[0] > 1000
     assert model.units == []
+
+
+def test_script_review_flow(app, tmp_path):
+    from narration import artifacts
+    from narration.gui.models.project_model import Project
+    from narration.types import Unit
+
+    video = tmp_path / "talk.mp4"
+    video.write_text("v")
+    project = Project.create(video, tmp_path / "work")
+    units = [Unit(id=f"u{i:04d}", start=i * 2.0, end=i * 2.0 + 1.5, slot_end=i * 2.0 + 2,
+                  raw_text=f"um sentence {i}", clean_text=f"Sentence {i}.",
+                  llm_text=f"Sentence {i}.") for i in range(1, 6)]
+    units[2].flags = ["dropped-content"]
+    units[2].clean_text = units[2].llm_text = ""
+    artifacts.write_json(project.work_dir / "script.json",
+                         {"model": "m", "units": [u.to_dict() for u in units]})
+
+    frame = app.new_window()
+    frame._attach(project)
+    panel = frame.script
+    assert panel.model.loaded and panel.list.GetItemCount() == 5
+    assert frame.notebook.GetSelection() == 0
+
+    panel.flagged_cb.SetValue(True)
+    panel._refill()
+    assert panel.list.GetItemCount() == 1
+
+    # Selecting from the timeline clears the filter that hides the unit.
+    frame.select_unit("u0002")
+    assert panel.selected_id() == "u0002" and panel.list.GetItemCount() == 5
+    assert frame.timeline.panel.model.selected == "u0002"
+
+    panel.editor.clean.SetText("A better second sentence.")
+    assert panel.dirty
+    panel.move(1)  # commits, moves on
+    assert panel.selected_id() == "u0003"
+    assert panel.model.get("u0002").edited
+    assert frame.GetTitle().startswith("•")
+
+    panel.undo()
+    assert panel.model.get("u0002").clean_text == "Sentence 2."
+    panel.redo()
+    panel.save()
+    saved = artifacts.read_json(project.work_dir / "script.json")["units"]
+    assert saved[1]["clean_text"] == "A better second sentence." and saved[1]["edited"]
+    assert not panel.dirty and not frame.GetTitle().startswith("•")

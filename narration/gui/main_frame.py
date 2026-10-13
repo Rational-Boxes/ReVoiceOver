@@ -6,11 +6,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 import wx
-import wx.adv
 import wx.aui as aui
 
 from narration import stages
-from narration.gui import events, icons
+from narration.config import read_glossary
+from narration.gui import chrome, events, icons
 from narration.gui.dialogs.new_project import NewProjectDialog
 from narration.gui.dialogs.token import TokenDialog
 from narration.gui.models.project_model import (
@@ -20,6 +20,7 @@ from narration.gui.models.project_model import (
     is_project_dir,
 )
 from narration.gui.panels.log_panel import LogPanel
+from narration.gui.panels.script_panel import ScriptCallbacks, ScriptPanel
 from narration.gui.panels.stages_panel import StagesPanel
 from narration.gui.runner import PipelineRunner
 from narration.gui.timeline_controller import TimelineController
@@ -32,7 +33,6 @@ if TYPE_CHECKING:
 PAGE_WELCOME, PAGE_PROJECT = 0, 1
 FIELD_MSG, FIELD_GAUGE, FIELD_PATH = range(3)
 GAUGE_WIDTH = 160
-LAYOUT_VERSION = 2  # bump when panes are added so stale perspectives are ignored
 TIMELINE_STAGES = {"extract", "segment", "clean"}
 
 
@@ -59,92 +59,18 @@ class MainFrame(wx.Frame):
         self.runner = PipelineRunner(self.reporter, self._finished_from_worker)
         self._current_stage: str | None = None
 
-        self._build_menus()
-        self._build_toolbar()
+        self.ids = chrome.Ids()
+        menubar, self.recent_menu = chrome.build_menubar(app.history, self.ids)
+        self.SetMenuBar(menubar)
+        self.toolbar = chrome.build_toolbar(self, self.ids)
         self._build_statusbar()
         self._build_panes()
         self._bind_events()
         self.SetDropTarget(_DropTarget(self))
-        self._restore_geometry()
+        chrome.restore_geometry(self, self.aui, app.config)
         self._update_ui()
 
     # ------------------------------------------------------------------ build
-    def _build_menus(self) -> None:
-        bar = wx.MenuBar()
-
-        file_menu = wx.Menu()
-        file_menu.Append(wx.ID_NEW, "&New Project…\tCtrl+N")
-        file_menu.Append(wx.ID_OPEN, "&Open Project…\tCtrl+O")
-        self.recent_menu = wx.Menu()
-        file_menu.AppendSubMenu(self.recent_menu, "Open &Recent")
-        self.app.history.UseMenu(self.recent_menu)
-        self.app.history.AddFilesToMenu(self.recent_menu)
-        file_menu.AppendSeparator()
-        self.id_show_folder = wx.NewIdRef()
-        file_menu.Append(self.id_show_folder, "Show &Work Folder")
-        file_menu.AppendSeparator()
-        file_menu.Append(wx.ID_CLOSE, "&Close Window\tCtrl+W")
-        file_menu.Append(wx.ID_EXIT, "&Quit\tCtrl+Q")
-        bar.Append(file_menu, "&File")
-
-        run_menu = wx.Menu()
-        self.id_run = wx.NewIdRef()
-        self.id_cancel = wx.NewIdRef()
-        self.id_continue = wx.NewIdRef()
-        run_menu.Append(self.id_run, "&Run\tCtrl+R", "Run the pipeline from the first "
-                                                    "stage that is not done")
-        run_menu.Append(self.id_continue, "Approve Script && &Continue\tCtrl+Shift+R")
-        self.run_from_menu = wx.Menu()
-        self._run_from_ids: dict[int, str] = {}
-        for stage in stages.STAGES:
-            item = self.run_from_menu.Append(wx.ID_ANY, stage.title)
-            self._run_from_ids[item.GetId()] = stage.name
-        run_menu.AppendSubMenu(self.run_from_menu, "Run &From")
-        run_menu.AppendSeparator()
-        run_menu.Append(self.id_cancel, "C&ancel\tCtrl+.")
-        bar.Append(run_menu, "&Run")
-
-        view_menu = wx.Menu()
-        self.id_reset_layout = wx.NewIdRef()
-        view_menu.Append(self.id_reset_layout, "&Reset Layout")
-        bar.Append(view_menu, "&View")
-
-        settings_menu = wx.Menu()
-        self.id_token = wx.NewIdRef()
-        settings_menu.Append(self.id_token, "DeepInfra &Token…")
-        bar.Append(settings_menu, "&Settings")
-
-        help_menu = wx.Menu()
-        help_menu.Append(wx.ID_ABOUT, "&About ReVoiceOver")
-        bar.Append(help_menu, "&Help")
-        self.SetMenuBar(bar)
-
-    def _build_toolbar(self) -> None:
-        tb = self.CreateToolBar(wx.TB_HORIZONTAL | wx.TB_TEXT | wx.TB_HORZ_LAYOUT | wx.TB_FLAT)
-        tb.SetToolBitmapSize(icons.TOOLBAR)
-        tb.AddTool(wx.ID_NEW, "New", icons.bundle("new", icons.TOOLBAR), "New project")
-        tb.AddTool(wx.ID_OPEN, "Open", icons.bundle("open", icons.TOOLBAR), "Open project")
-        tb.AddSeparator()
-        tb.AddTool(self.id_run, "Run", icons.bundle("run", icons.TOOLBAR),
-                   "Run from the first stage that is not done")
-        self.id_run_from_tool = wx.NewIdRef()
-        tb.AddTool(self.id_run_from_tool, "Run From", icons.bundle("run-from", icons.TOOLBAR),
-                   "Run from a chosen stage", wx.ITEM_DROPDOWN)
-        tb.SetDropdownMenu(self.id_run_from_tool, self._make_run_from_menu())
-        tb.AddTool(self.id_cancel, "Cancel", icons.bundle("cancel", icons.TOOLBAR),
-                   "Cancel the running job")
-        tb.Realize()
-        self.toolbar = tb
-
-    def _make_run_from_menu(self) -> wx.Menu:
-        menu = wx.Menu()
-        self._run_from_ids_tb: dict[int, str] = {}
-        for stage in stages.STAGES:
-            item = menu.Append(wx.ID_ANY, stage.title)
-            self._run_from_ids_tb[item.GetId()] = stage.name
-            menu.Bind(wx.EVT_MENU, self._on_run_from_menu, item)
-        return menu
-
     def _build_statusbar(self) -> None:
         sb = self.CreateStatusBar(3)
         sb.SetStatusWidths([-1, GAUGE_WIDTH, -1])
@@ -164,7 +90,11 @@ class MainFrame(wx.Frame):
         self.book = wx.Simplebook(center)
         self.welcome = WelcomePanel(self.book, self.new_project, self.open_project_dialog)
         self.notebook = wx.Notebook(self.book)
+        self.script = ScriptPanel(self.notebook, ScriptCallbacks(
+            select=self.select_unit, play_original=lambda uid: self.timeline.play(uid),
+            approve=self.approve_script, changed=self._on_script_changed))
         self.log_panel = LogPanel(self.notebook)
+        self.notebook.AddPage(self.script, "Script")
         self.notebook.AddPage(self.log_panel, "Log")
         self.book.AddPage(self.welcome, "welcome")
         self.book.AddPage(self.notebook, "project")
@@ -174,7 +104,7 @@ class MainFrame(wx.Frame):
         center.SetSizer(sizer)
         self.aui.AddPane(center, aui.AuiPaneInfo().Name("center").CenterPane())
 
-        self.timeline = TimelineController(self, self.infobar)
+        self.timeline = TimelineController(self, self.infobar, on_select=self.select_unit)
         self.aui.AddPane(self.timeline.panel, aui.AuiPaneInfo().Name("timeline").Caption("Timeline")
                          .Bottom().BestSize(-1, 210).MinSize(-1, 150).CloseButton(False))
 
@@ -185,20 +115,21 @@ class MainFrame(wx.Frame):
         self.Bind(wx.EVT_MENU, lambda _e: self.new_project(), id=wx.ID_NEW)
         self.Bind(wx.EVT_MENU, lambda _e: self.open_project_dialog(), id=wx.ID_OPEN)
         self.Bind(wx.EVT_MENU_RANGE, self._on_recent, id=wx.ID_FILE1, id2=wx.ID_FILE9)
-        self.Bind(wx.EVT_MENU, self._on_show_folder, id=self.id_show_folder)
+        self.Bind(wx.EVT_MENU, self._on_show_folder, id=self.ids.show_folder)
         self.Bind(wx.EVT_MENU, lambda _e: self.Close(), id=wx.ID_CLOSE)
         self.Bind(wx.EVT_MENU, self._on_quit, id=wx.ID_EXIT)
-        self.Bind(wx.EVT_MENU, lambda _e: self.run_next(), id=self.id_run)
-        self.Bind(wx.EVT_MENU, lambda _e: self.run_from(self._after_review()),
-                  id=self.id_continue)
-        self.Bind(wx.EVT_MENU, lambda _e: self.runner.cancel(), id=self.id_cancel)
+        self.Bind(wx.EVT_MENU, lambda _e: self.script.save(), id=wx.ID_SAVE)
+        self.Bind(wx.EVT_MENU, lambda _e: self.script.undo(), id=wx.ID_UNDO)
+        self.Bind(wx.EVT_MENU, lambda _e: self.script.redo(), id=wx.ID_REDO)
+        self.Bind(wx.EVT_MENU, lambda _e: self.run_next(), id=self.ids.run)
+        self.Bind(wx.EVT_MENU, lambda _e: self.approve_script(), id=self.ids.approve)
+        self.Bind(wx.EVT_MENU, lambda _e: self.runner.cancel(), id=self.ids.cancel)
         # The arrow part shows the dropdown menu natively; the button part pops it too.
-        self.Bind(wx.EVT_TOOL, self._on_run_from_tool, id=self.id_run_from_tool)
-        for item_id in self._run_from_ids:
-            self.Bind(wx.EVT_MENU, self._on_run_from_menu, id=item_id)
-        self.Bind(wx.EVT_MENU, self._on_reset_layout, id=self.id_reset_layout)
-        self.Bind(wx.EVT_MENU, self._on_token, id=self.id_token)
-        self.Bind(wx.EVT_MENU, self._on_about, id=wx.ID_ABOUT)
+        self.Bind(wx.EVT_TOOL, self._on_run_from_tool, id=self.ids.run_from_tool)
+        self.Bind(wx.EVT_MENU, self._on_run_from_menu)  # stage items from either menu
+        self.Bind(wx.EVT_MENU, self._on_reset_layout, id=self.ids.reset_layout)
+        self.Bind(wx.EVT_MENU, self._on_token, id=self.ids.token)
+        self.Bind(wx.EVT_MENU, lambda _e: chrome.show_about(self), id=wx.ID_ABOUT)
         self.Bind(wx.EVT_CLOSE, self._on_close)
 
         self.Bind(events.EVT_STAGE_STARTED, self._on_stage_started)
@@ -254,6 +185,49 @@ class MainFrame(wx.Frame):
         self.book.SetSelection(PAGE_PROJECT)
         self.refresh_status()
         self.timeline.load(project.work_dir)
+        self.load_script()
+
+    # ---------------------------------------------------------------- script
+    def load_script(self) -> None:
+        if self.project is None:
+            return
+        self.script.load(self.project.work_dir, self.project.video.name,
+                         read_glossary(self.project.video, self.project.config()))
+        if self.script.model.loaded:
+            self.notebook.SetSelection(0)
+
+    def select_unit(self, unit_id: str) -> None:
+        """Selection sync between the script list and the timeline."""
+        self.timeline.select(unit_id)
+        if self.script.selected_id() != unit_id:
+            self.script.select(unit_id)
+
+    def approve_script(self) -> None:
+        if self.project is None or not self.script.model.loaded:
+            return
+        if self.script.dirty:
+            self.script.save()
+        self.run_from(self._after_review())
+
+    def _on_script_changed(self) -> None:
+        dirty = self.script.dirty
+        if self.project is not None:
+            self.SetTitle(f"{'• ' if dirty else ''}{self.project.name} — ReVoiceOver")
+        self.timeline.refresh_units(self.script.model.units)
+        bar = self.GetMenuBar()
+        bar.Enable(wx.ID_SAVE, self.script.model.dirty)
+
+    def _confirm_unsaved(self, action: str) -> bool:
+        """Ask about unsaved script edits; returns False to abort ``action``."""
+        if not self.script.dirty:
+            return True
+        answer = wx.MessageBox(f"The script has unsaved edits. Save them before {action}?",
+                               "Unsaved Script", wx.YES_NO | wx.CANCEL | wx.ICON_QUESTION, self)
+        if answer == wx.CANCEL:
+            return False
+        if answer == wx.YES:
+            self.script.save()
+        return True
 
     # ------------------------------------------------------------------ runs
     def _first_pending(self) -> str | None:
@@ -288,6 +262,8 @@ class MainFrame(wx.Frame):
 
     def _start(self, *, start: str | None, stop: str | None = None) -> None:
         if self.project is None or self.runner.running:
+            return
+        if not self._confirm_unsaved("running"):
             return
         self.infobar.Dismiss()
         self.runner.start(self.project, start=start, stop=stop)
@@ -342,22 +318,27 @@ class MainFrame(wx.Frame):
         self.refresh_status()
         if event.ok and event.stage in TIMELINE_STAGES and self.project is not None:
             self.timeline.load(self.project.work_dir)
+        if event.ok and event.stage == stages.REVIEW_AFTER:
+            self.load_script()
 
     # ------------------------------------------------------------ UI updates
     def _update_ui(self) -> None:
         has_project = self.project is not None
         busy = self.runner.running
-        for tool_id in (self.id_run, self.id_run_from_tool):
+        for tool_id in (self.ids.run, self.ids.run_from_tool):
             self.toolbar.EnableTool(tool_id, has_project and not busy)
-        self.toolbar.EnableTool(self.id_cancel, busy)
+        self.toolbar.EnableTool(self.ids.cancel, busy)
         bar = self.GetMenuBar()
-        bar.Enable(self.id_run, has_project and not busy)
-        bar.Enable(self.id_continue, has_project and not busy)
-        bar.Enable(self.id_cancel, busy)
-        bar.Enable(self.id_show_folder, has_project)
-        for item_id in self._run_from_ids:
-            bar.Enable(item_id, has_project and not busy)
+        bar.Enable(self.ids.run, has_project and not busy)
+        bar.Enable(self.ids.approve, has_project and not busy)
+        bar.Enable(self.ids.cancel, busy)
+        bar.Enable(self.ids.show_folder, has_project)
+        bar.Enable(wx.ID_SAVE, self.script.model.dirty)
+        for item_id in self.ids.run_from:
+            if bar.FindItemById(item_id):
+                bar.Enable(item_id, has_project and not busy)
         self.stages_panel.set_busy(busy)
+        self.script.set_busy(busy)
         self.stages_panel.Enable(has_project)
 
     def _on_statusbar_size(self, event: wx.SizeEvent) -> None:
@@ -367,12 +348,14 @@ class MainFrame(wx.Frame):
 
     # ------------------------------------------------------------- handlers
     def _on_run_from_menu(self, event: wx.CommandEvent) -> None:
-        name = self._run_from_ids.get(event.GetId()) or self._run_from_ids_tb.get(event.GetId())
+        name = self.ids.run_from.get(event.GetId())
         if name:
             self.run_from(name)
+        else:
+            event.Skip()
 
     def _on_run_from_tool(self, _event: wx.CommandEvent) -> None:
-        tool = self.toolbar.FindById(self.id_run_from_tool)
+        tool = self.toolbar.FindById(self.ids.run_from_tool)
         self.toolbar.PopupMenu(tool.GetDropdownMenu())
 
     def _on_recent(self, event: wx.CommandEvent) -> None:
@@ -396,23 +379,15 @@ class MainFrame(wx.Frame):
         with TokenDialog(self) as dlg:
             dlg.ShowModal()
 
-    def _on_about(self, _event: wx.CommandEvent) -> None:
-        from narration import __version__
-
-        info = wx.adv.AboutDialogInfo()
-        info.SetName("ReVoiceOver")
-        info.SetVersion(__version__)
-        info.SetDescription("Rebuild a video's narration: transcribe, clean the script, "
-                            "re-voice it in a cloned voice, and remux.")
-        info.SetIcon(self.GetIcons().GetIcon(wx.Size(64, 64)))
-        wx.adv.AboutBox(info, self)
-
     def _on_quit(self, _event: wx.CommandEvent) -> None:
         for frame in self.app.frames():
             if not frame.Close():
                 return
 
     def _on_close(self, event: wx.CloseEvent) -> None:
+        if event.CanVeto() and not self._confirm_unsaved("closing"):
+            event.Veto()
+            return
         if self.runner.running:
             if event.CanVeto():
                 answer = wx.MessageBox("A job is still running. Cancel it and close?",
@@ -423,31 +398,7 @@ class MainFrame(wx.Frame):
             self.runner.cancel()
             self.runner.join(timeout=10)
         self.timeline.stop()
-        self._save_geometry()
+        chrome.save_geometry(self, self.aui, self.app.config)
         self.app.history.RemoveMenu(self.recent_menu)
         self.aui.UnInit()
         self.Destroy()
-
-    # ------------------------------------------------------------ persistence
-    def _restore_geometry(self) -> None:
-        cfg = self.app.config
-        perspective = cfg.Read("/Window/Perspective", "")
-        if perspective and cfg.ReadInt("/Window/LayoutVersion", 0) == LAYOUT_VERSION:
-            self.aui.LoadPerspective(perspective)
-        w, h = cfg.ReadInt("/Window/Width", 0), cfg.ReadInt("/Window/Height", 0)
-        if w and h:
-            self.SetSize(wx.Size(w, h))
-        if cfg.ReadBool("/Window/Maximized", False):
-            self.Maximize()
-        self.CentreOnScreen()
-
-    def _save_geometry(self) -> None:
-        cfg = self.app.config
-        cfg.Write("/Window/Perspective", self.aui.SavePerspective())
-        cfg.WriteInt("/Window/LayoutVersion", LAYOUT_VERSION)
-        cfg.WriteBool("/Window/Maximized", self.IsMaximized())
-        if not self.IsMaximized():
-            w, h = self.GetSize()
-            cfg.WriteInt("/Window/Width", w)
-            cfg.WriteInt("/Window/Height", h)
-        cfg.Flush()
