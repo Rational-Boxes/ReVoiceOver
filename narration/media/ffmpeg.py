@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import functools
 import json
+import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 from collections.abc import Callable
@@ -16,7 +18,9 @@ from typing import Any
 
 from narration.context import Cancelled
 
-H264_ENCODERS = ("libx264", "libopenh264", "h264_vaapi", "h264_nvenc", "h264_qsv")
+# h264_videotoolbox is what the macOS build has (Apple's encoder, no extra libraries).
+H264_ENCODERS = ("libx264", "libopenh264", "h264_videotoolbox", "h264_vaapi", "h264_nvenc",
+                 "h264_qsv")
 
 
 class FfmpegError(RuntimeError):
@@ -37,11 +41,34 @@ class MediaInfo:
     raw: dict[str, Any]
 
 
+def bundled_dirs() -> list[Path]:
+    """Where a packaged app keeps its own ffmpeg: ``$NARR_FFMPEG_DIR``, then
+    ``ffmpeg/`` inside a PyInstaller bundle (macOS app, Windows install)."""
+    dirs = []
+    if env := os.environ.get("NARR_FFMPEG_DIR"):
+        dirs.append(Path(env))
+    if getattr(sys, "frozen", False):
+        dirs.append(Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent)) / "ffmpeg")
+    return dirs
+
+
+@functools.cache
 def _binary(name: str) -> str:
+    exe = name + (".exe" if sys.platform == "win32" else "")
+    for folder in bundled_dirs():
+        if (folder / exe).is_file():
+            return str(folder / exe)
     path = shutil.which(name)
     if path is None:
         raise FfmpegError(f"{name} not found on PATH; install ffmpeg")
     return path
+
+
+# Text from ffmpeg is UTF-8 everywhere (not the Windows code page), and a
+# windowed app must not flash a console for every call.
+_TEXT: dict[str, Any] = {"text": True, "encoding": "utf-8", "errors": "replace"}
+if sys.platform == "win32":
+    _TEXT["creationflags"] = subprocess.CREATE_NO_WINDOW
 
 
 def _parse_rate(rate: str | None) -> float | None:
@@ -55,7 +82,7 @@ def probe(path: Path) -> MediaInfo:
     proc = subprocess.run(
         [_binary("ffprobe"), "-v", "error", "-print_format", "json",
          "-show_format", "-show_streams", str(path)],
-        capture_output=True, text=True,
+        capture_output=True, **_TEXT,
     )
     if proc.returncode != 0:
         raise FfmpegError(f"ffprobe failed on {path}: {proc.stderr.strip()}")
@@ -90,8 +117,8 @@ def run(
     """
     cmd = [_binary("ffmpeg"), "-hide_banner", "-nostdin", "-y",
            "-progress", "pipe:1", "-nostats", *args]
-    with tempfile.TemporaryFile(mode="w+") as err:
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=err, text=True)
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8", errors="replace") as err:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=err, **_TEXT)
         assert proc.stdout is not None
         try:
             for line in proc.stdout:
@@ -118,7 +145,7 @@ def stderr_of(args: list[str]) -> str:
     """Run an analysis-only ffmpeg command and return its stderr."""
     proc = subprocess.run(
         [_binary("ffmpeg"), "-hide_banner", "-nostdin", *args],
-        capture_output=True, text=True,
+        capture_output=True, **_TEXT,
     )
     if proc.returncode != 0:
         raise FfmpegError(f"ffmpeg failed: {proc.stderr.strip()[-2000:]}")
@@ -159,7 +186,7 @@ def detect_silences(path: Path, *, noise_db: float, min_s: float) -> list[tuple[
 @functools.cache
 def available_encoders() -> frozenset[str]:
     proc = subprocess.run([_binary("ffmpeg"), "-hide_banner", "-encoders"],
-                          capture_output=True, text=True)
+                          capture_output=True, **_TEXT)
     names = set()
     for line in proc.stdout.splitlines():
         parts = line.split()

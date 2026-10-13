@@ -60,3 +60,16 @@ def test_extract_cancel(demo_video, tmp_path):
     result = asyncio.run(run_pipeline(ctx, stop="extract"))
     assert result.outcome is Outcome.CANCELLED
     assert stages.project_status(ctx.video, ctx.work_dir)["extract"] is stages.Status.MISSING
+
+
+def test_bundled_ffmpeg_comes_before_path(tmp_path, monkeypatch):
+    from narration.media import ffmpeg
+
+    (tmp_path / "ffprobe").write_text("")
+    monkeypatch.setenv("NARR_FFMPEG_DIR", str(tmp_path))
+    ffmpeg._binary.cache_clear()
+    try:
+        assert ffmpeg._binary("ffprobe") == str(tmp_path / "ffprobe")
+        assert ffmpeg._binary("ffmpeg") != str(tmp_path / "ffmpeg")  # not bundled: PATH
+    finally:
+        ffmpeg._binary.cache_clear()
