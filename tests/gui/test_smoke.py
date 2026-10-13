@@ -42,10 +42,15 @@ def test_open_project_and_run_extract(app, demo_video, tmp_path):
 
     frame = app.new_window()
     assert frame.book.GetSelection() == 0  # welcome page
+    assert not frame.toolbar.GetToolEnabled(frame.ids.run)
 
     project = Project.create(demo_video, tmp_path / "work")
     frame._attach(project)
     assert frame.book.GetSelection() == 1
+    # Opening a project must enable the run controls right away.
+    assert frame.toolbar.GetToolEnabled(frame.ids.run)
+    assert frame.GetMenuBar().IsEnabled(frame.ids.run)
+    assert frame.stages_panel.IsEnabled()
     assert "demo" in frame.GetTitle()
 
     frame.run_only("extract")
@@ -60,6 +65,18 @@ def test_open_project_and_run_extract(app, demo_video, tmp_path):
     assert model.duration == pytest.approx(8.0, abs=0.2)
     assert model.peaks.shape[0] > 1000
     assert model.units == []
+
+
+def test_new_project_replaces_idle_project(app, demo_video, tmp_path):
+    from narration.gui.models.project_model import Project
+
+    frame = app.new_window()
+    frame._show_project(Project.create(demo_video, tmp_path / "one"))
+    second = Project.create(demo_video, tmp_path / "two")
+    frame._show_project(second)
+    assert app.frames() == [frame]
+    assert frame.project is second
+    assert frame.toolbar.GetToolEnabled(frame.ids.run)
 
 
 def test_script_review_flow(app, tmp_path):

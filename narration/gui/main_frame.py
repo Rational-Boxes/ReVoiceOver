@@ -181,7 +181,13 @@ class MainFrame(wx.Frame):
                           wx.OK | wx.ICON_WARNING, self)
 
     def _show_project(self, project: Project) -> None:
-        target = self if self.project is None else self.app.window_for_project()
+        """Show ``project`` here, replacing the current one unless it is running."""
+        if self.runner.running:
+            target = self.app.window_for_project()
+        elif self.project is None or self._confirm_unsaved("switching projects"):
+            target = self
+        else:
+            return
         target._attach(project)
         target.Raise()
 
@@ -197,6 +203,7 @@ class MainFrame(wx.Frame):
         self.timeline.load(project.work_dir)
         self.load_script()
         self.review.voice_panel.load(project.work_dir)
+        self.update_ui()
 
     # ---------------------------------------------------------------- script
     def load_script(self) -> None:
