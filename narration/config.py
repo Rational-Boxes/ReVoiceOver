@@ -73,6 +73,8 @@ class Transcribe(_Section):
 class Segment(_Section):
     pause_split_s: float = 0.6
     max_unit_s: float = 20.0
+    min_unit_words: int = Field(3, ge=1, description="shorter units merge into the next one")
+    merge_gap_s: float = Field(1.0, ge=0, description="…if the pause before it is shorter")
 
 
 class Clean(_Section):

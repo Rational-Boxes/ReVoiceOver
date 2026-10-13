@@ -42,6 +42,8 @@ class Unit(_Serializable):
     raw_text: str
     clean_text: str | None = None
     keep_original: bool = False
+    first_word: int = 0  # index into words.json
+    word_count: int = 0
 
     @property
     def slot(self) -> float:
