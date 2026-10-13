@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.rationalboxes.ReVoiceOver</id>
+  <name>ReVoiceOver</name>
+  <summary>Re-narrate a screen recording in your own voice</summary>
+  <developer id="com.rationalboxes">
+    <name>Rational Boxes</name>
+  </developer>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      ReVoiceOver transcribes a video's narration, cleans the script with a
+      language model (fillers, stutters, false starts, repeats), lets you review
+      and edit it, then re-speaks it in a clone of your voice, timed to the
+      original video. The result is a new video with clean narration and
+      matching subtitles.
+    </p>
+    <p>
+      Speech recognition, script cleaning and voice synthesis run on DeepInfra
+      with open models and need a DeepInfra API token. Media work runs locally.
+    </p>
+  </description>
+  <launchable type="desktop-id">com.rationalboxes.ReVoiceOver.desktop</launchable>
+  <provides>
+    <binary>narr-gui</binary>
+    <binary>narr</binary>
+  </provides>
+  <url type="homepage">https://github.com/Rational-Boxes/ReVoiceOver</url>
+  <url type="bugtracker">https://github.com/Rational-Boxes/ReVoiceOver/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Reviewing the cleaned script against the original narration</caption>
+      <image>https://raw.githubusercontent.com/Rational-Boxes/ReVoiceOver/main/design_documents/workbench.png</image>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1"/>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <requires>
+    <internet>always</internet>
+  </requires>
+  <releases>
+    <release version="0.1.0" date="2026-10-13"/>
+  </releases>
+</component>

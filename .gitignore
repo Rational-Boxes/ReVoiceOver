@@ -26,3 +26,11 @@ work/
 .env
 .env.*
 !.env.example
+
+# Packaging output
+build/
+dist/
+# Finished installers (published as GitHub release assets, not committed)
+releases/*
+!releases/README.md
+.flatpak-builder/

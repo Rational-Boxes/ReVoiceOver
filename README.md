@@ -39,7 +39,23 @@ Every stage writes its results to the project's work folder. Runs can be
 stopped and resumed, edits only redo what changed, and every API result is
 cached so nothing is paid for twice.
 
-## Requirements
+## Install
+
+Installers for each release are on the
+[releases page](https://github.com/Rational-Boxes/ReVoiceOver/releases). Each
+one includes ffmpeg; you only need a DeepInfra API token.
+
+| Platform | File | Notes |
+|---|---|---|
+| Linux | `ReVoiceOver-<version>-linux-x86_64.flatpak` (or `aarch64`) | `flatpak install --user ReVoiceOver-*.flatpak`. The command-line tool is `flatpak run --command=narr com.rationalboxes.ReVoiceOver`. |
+| macOS 11+ | `ReVoiceOver-<version>-macos-arm64.dmg` (Apple silicon) or `-x86_64.dmg` (Intel) | Drag the app to Applications. The app is not notarized yet: on first launch, open it, then allow it under **System Settings › Privacy & Security › Open Anyway**. |
+| Windows 10/11 | `ReVoiceOver-<version>-windows-x64-setup.exe` | Installs for your user without admin rights. `narr.exe` (the command-line tool) is in the install folder. |
+
+To build the installers yourself, see [`packaging/README.md`](packaging/README.md).
+
+## Running from source
+
+### Requirements
 
 - Linux (developed on Fedora 43), Python 3.11+
 - **ffmpeg** and **ffprobe**. Fedora's `ffmpeg-free` works and includes
@@ -53,7 +69,7 @@ On Fedora:
 sudo dnf install ffmpeg-free python3-wxpython4 python3-wxpython4-media portaudio
 ```
 
-## Getting started
+### Getting started
 
 ```bash
 git clone git@github.com:Rational-Boxes/ReVoiceOver.git

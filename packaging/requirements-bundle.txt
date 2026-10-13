@@ -1,0 +1,7 @@
+# macOS and Windows app bundles: the app's pinned dependencies, plus wxPython
+# (a system package on Linux, a wheel here) and the build tools.
+-r requirements.txt
+wxPython==4.2.4
+pyinstaller==6.22.3
+pyinstaller-hooks-contrib==2026.8
+pillow==12.3.0

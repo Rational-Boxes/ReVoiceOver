@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=ReVoiceOver
+GenericName=Narration Editor
+Comment=Re-narrate a screen recording in your own voice, without the ums
+Exec=narr-gui %f
+Icon=com.rationalboxes.ReVoiceOver
+Terminal=false
+Categories=AudioVideo;Video;AudioVideoEditing;
+MimeType=video/mp4;video/quicktime;video/x-matroska;video/webm;
+Keywords=voiceover;narration;transcribe;subtitles;tts;

@@ -1,0 +1,94 @@
+annotated-doc==0.0.5
+    # via typer
+annotated-types==0.8.0
+    # via pydantic
+anyio==4.15.1
+    # via httpx
+certifi==2026.7.22
+    # via
+    #   httpcore
+    #   httpx
+cffi==2.1.1
+    # via
+    #   cryptography
+    #   sounddevice
+    #   soundfile
+click==8.5.0
+    # via jiwer
+colorama==0.4.6 ; sys_platform == 'win32'
+    # via typer
+cryptography==50.0.2 ; sys_platform == 'linux'
+    # via secretstorage
+h11==0.16.0
+    # via httpcore
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via narration-rebuild (pyproject.toml)
+idna==3.20
+    # via
+    #   anyio
+    #   httpx
+jaraco-classes==3.4.0
+    # via keyring
+jaraco-context==6.1.2
+    # via keyring
+jaraco-functools==4.6.0
+    # via keyring
+jeepney==0.9.0 ; sys_platform == 'linux'
+    # via
+    #   keyring
+    #   secretstorage
+jiwer==4.0.0
+    # via narration-rebuild (pyproject.toml)
+keyring==25.7.0
+    # via narration-rebuild (pyproject.toml)
+markdown-it-py==4.2.0
+    # via rich
+mdurl==0.1.2
+    # via markdown-it-py
+more-itertools==11.2.0
+    # via
+    #   jaraco-classes
+    #   jaraco-functools
+numpy==2.5.4
+    # via
+    #   narration-rebuild (pyproject.toml)
+    #   soundfile
+pycparser==3.11 ; implementation_name != 'PyPy'
+    # via cffi
+pydantic==2.14.1
+    # via narration-rebuild (pyproject.toml)
+pydantic-core==2.50.1
+    # via pydantic
+pygments==2.21.0
+    # via rich
+pywin32-ctypes==0.2.3 ; sys_platform == 'win32'
+    # via keyring
+rapidfuzz==3.14.6
+    # via jiwer
+rich==15.0.0
+    # via
+    #   narration-rebuild (pyproject.toml)
+    #   typer
+secretstorage==3.5.0 ; sys_platform == 'linux'
+    # via keyring
+shellingham==1.5.4
+    # via typer
+sounddevice==0.5.6
+    # via narration-rebuild (pyproject.toml)
+soundfile==0.14.0
+    # via narration-rebuild (pyproject.toml)
+tomli-w==1.2.0
+    # via narration-rebuild (pyproject.toml)
+typer==0.27.3
+    # via narration-rebuild (pyproject.toml)
+typing-extensions==4.16.0
+    # via
+    #   anyio
+    #   pydantic
+    #   pydantic-core
+    #   soundfile
+    #   typing-inspection
+typing-inspection==0.4.4
+    # via pydantic

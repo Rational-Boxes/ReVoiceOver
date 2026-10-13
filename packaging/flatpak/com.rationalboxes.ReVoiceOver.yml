@@ -1,0 +1,91 @@
+# Flatpak manifest. Build and install locally with
+#   packaging/flatpak/build.sh
+# Python wheels are pinned in python3-deps.json (regenerate with gen_python_deps.py).
+id: com.rationalboxes.ReVoiceOver
+runtime: org.freedesktop.Platform
+runtime-version: '25.08'
+sdk: org.freedesktop.Sdk
+command: narr-gui
+finish-args:
+  - --share=network          # DeepInfra API
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --socket=pulseaudio      # playback in the script and timeline views
+  - --filesystem=home        # videos, and project work folders beside them
+  - --talk-name=org.freedesktop.secrets   # API token in the system keyring
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /share/man
+  - '*.a'
+  - '*.la'
+
+modules:
+  - name: portaudio
+    buildsystem: autotools
+    config-opts: [--disable-static, --without-jack, --without-oss]
+    sources:
+      - type: git
+        url: https://github.com/PortAudio/portaudio.git
+        tag: v19.7.0
+        commit: 147dd722548358763a8b649b3e4b41dfffbcfbb6
+    cleanup: [/bin]
+
+  # ffmpeg and ffprobe, built static with libx264 (the app is GPL-3.0-or-later too).
+  - name: x264
+    buildsystem: autotools
+    config-opts: [--enable-static, --enable-pic, --disable-cli]
+    sources:
+      - type: git
+        url: https://code.videolan.org/videolan/x264.git
+        commit: b35605ace3ddf7c1a5d67a2eb553f034aef41d55
+    cleanup: ['*']
+
+  - name: ffmpeg
+    config-opts:
+      - --enable-gpl
+      - --enable-libx264
+      - --disable-shared
+      - --enable-static
+      - --disable-doc
+      - --disable-ffplay
+      - --disable-debug
+      - --disable-autodetect   # no runtime surprises: only what is listed here
+      - --enable-zlib
+    sources:
+      - type: archive
+        url: https://ffmpeg.org/releases/ffmpeg-8.1.3.tar.xz
+        sha256: 7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
+    cleanup: [/share]
+
+  - python3-wx-build-deps.json
+
+  - name: wxpython
+    buildsystem: simple
+    build-commands:
+      - WXPYTHON_BUILD_ARGS="--jobs=${FLATPAK_BUILDER_N_JOBS}" pip3 install --verbose
+        --no-index --no-build-isolation --no-deps --prefix=${FLATPAK_DEST} .
+    sources:
+      - type: archive
+        url: https://files.pythonhosted.org/packages/source/w/wxpython/wxpython-4.2.4.tar.gz
+        sha256: 2eb123979c87bcb329e8a2452269d60ff8f9f651e9bf25c67579e53c4ebbae3c
+    cleanup:
+      - /bin
+
+  - python3-deps.json
+
+  - name: revoiceover
+    buildsystem: simple
+    build-commands:
+      - pip3 install --no-index --no-build-isolation --no-deps --prefix=${FLATPAK_DEST} .
+      - install -Dm644 packaging/flatpak/${FLATPAK_ID}.desktop -t ${FLATPAK_DEST}/share/applications
+      - install -Dm644 packaging/flatpak/${FLATPAK_ID}.metainfo.xml -t ${FLATPAK_DEST}/share/metainfo
+      - install -Dm644 narration/gui/resources/icons/app.svg
+        ${FLATPAK_DEST}/share/icons/hicolor/scalable/apps/${FLATPAK_ID}.svg
+    sources:
+      - type: dir
+        path: ../..
+        skip: [.venv, .git, work, build, releases, .flatpak-builder, .pytest_cache,
+               .mypy_cache, .ruff_cache, .env, .idea]
