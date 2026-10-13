@@ -81,9 +81,13 @@ def test_bad_range(fake_stages):
         asyncio.run(run_pipeline(ctx, start="qa", stop="segment"))
 
 
-def test_stub_stage_reports_not_implemented(fake_stages, monkeypatch):
+def test_not_implemented_stage_is_reported(fake_stages, monkeypatch):
     ctx, _ = fake_stages
-    stub = importlib.reload(importlib.import_module("narration.stages.fit"))
-    monkeypatch.setattr(stub, "run", stub.run)
+    from narration.stages import StageNotImplemented
+
+    def later(ctx):
+        raise StageNotImplemented("compact timing arrives in milestone 9")
+
+    monkeypatch.setattr(importlib.import_module("narration.stages.fit"), "run", later)
     result = asyncio.run(run_pipeline(ctx, start="fit"))
     assert result.outcome is Outcome.NOT_IMPLEMENTED and result.last_stage == "fit"

@@ -105,8 +105,14 @@ class Synth(_Section):
 
 class Fit(_Section):
     timing: Literal["anchor", "compact"] = "anchor"
-    max_atempo: float = 1.15
+    max_atempo: float = Field(1.15, ge=1.0, le=2.0, description="most a clip is sped up")
     compact_gap_s: float = 0.35
+    trim_db: float = Field(-50.0, description="silence threshold for trimming clip edges")
+
+
+class Assemble(_Section):
+    audio_bitrate: str = "192k"
+    video_bitrate: str = Field("", description='e.g. "6M"; "" = match the source')
 
 
 class QA(_Section):
@@ -127,6 +133,7 @@ class Config(_Section):
     voice: Voice = Voice()
     synth: Synth = Synth()
     fit: Fit = Fit()
+    assemble: Assemble = Assemble()
     qa: QA = QA()
 
 
