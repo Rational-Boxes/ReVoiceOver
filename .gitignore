@@ -1,0 +1,23 @@
+.venv/
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+work/
+
+# IDE / editor files
+.idea/
+.vscode/
+*.code-workspace
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+.fleet/
+.zed/
+*.swp
+*.swo
+*~
+.DS_Store
