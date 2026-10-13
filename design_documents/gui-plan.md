@@ -301,8 +301,11 @@ in a runnable state and a detailed commit.
 ## 8. Risks and open questions
 
 - **API token in a desktop app** (decided). Apps started from a desktop launcher
-  do not inherit shell env vars. `DEEPINFRA_TOKEN` takes precedence. If it is
-  not set, the token is read from the system keyring through `keyring`
+  do not inherit shell env vars. Lookup order: `DEEPINFRA_TOKEN` (or the
+  alias `DEEPINFRA_KEY`) in the environment, then a `.env` file (the current
+  directory and its parents, then `~/.config/narr/.env`, or exactly the file
+  given with `--env-file` to `narr` or `narr-gui`), then the system keyring
+  through `keyring`
   (service `narr`, user `deepinfra`). The token is set from
   *Settings → DeepInfra token…* or with `narr token set`. It is never written to
   work dirs, config files or logs.

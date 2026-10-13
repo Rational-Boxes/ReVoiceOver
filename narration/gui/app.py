@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import argparse
 import sys
 from pathlib import Path
 
 import wx
+
+from narration import credentials
 
 APP_NAME = "ReVoiceOver"
 MAX_RECENT = 9
@@ -49,13 +52,27 @@ class NarrApp(wx.App):
         return self.new_window()
 
 
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="narr-gui", description="ReVoiceOver desktop app")
+    parser.add_argument("path", nargs="?", type=Path,
+                        help="a video to start a project for, or a project work folder")
+    parser.add_argument("--env-file", type=Path,
+                        help="read DEEPINFRA_TOKEN / DEEPINFRA_KEY from this file "
+                             "instead of searching for .env")
+    return parser.parse_args(argv)
+
+
 def main(argv: list[str] | None = None) -> None:
-    args = sys.argv[1:] if argv is None else argv
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    if args.env_file is not None:
+        try:
+            credentials.use_env_file(args.env_file.expanduser())
+        except FileNotFoundError as exc:
+            sys.exit(f"narr-gui: {exc}")
     app = NarrApp(redirect=False)
     frame = app.new_window()
-    if args:
-        target = Path(args[0]).expanduser()
-        wx.CallAfter(frame.open_path, target)
+    if args.path is not None:
+        wx.CallAfter(frame.open_path, args.path.expanduser())
     app.MainLoop()
 
 

@@ -13,8 +13,10 @@ from narration import credentials
 def isolated_env(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch):
     """No real user config, no real token, no keyring access."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path_factory.mktemp("xdg")))
-    monkeypatch.delenv(credentials.ENV_VAR, raising=False)
+    for name in credentials.ENV_VARS:
+        monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(credentials, "keyring_token", lambda: None)
+    monkeypatch.setattr(credentials, "dotenv_token", lambda: None)
 
 
 @pytest.fixture(scope="session")

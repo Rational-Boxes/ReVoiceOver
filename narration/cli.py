@@ -20,6 +20,16 @@ app = typer.Typer(no_args_is_help=True, add_completion=False,
 token_app = typer.Typer(no_args_is_help=True, help="Manage the DeepInfra API token.")
 app.add_typer(token_app, name="token")
 
+
+@app.callback()
+def _global_options(
+    env_file: Annotated[Path | None, typer.Option(
+        "--env-file", exists=True, dir_okay=False,
+        help="Read DEEPINFRA_TOKEN / DEEPINFRA_KEY from this file instead of searching "
+             "for .env")] = None,
+) -> None:
+    credentials.use_env_file(env_file)
+
 VideoArg = Annotated[Path, typer.Argument(exists=True, dir_okay=False, help="Source video")]
 WorkOpt = Annotated[Path | None, typer.Option("--work-dir", "-w",
                                               help="Default: ./work/<video-stem>")]
@@ -101,8 +111,11 @@ def token_clear() -> None:
 def token_status() -> None:
     """Show where the token is coming from (never prints it)."""
     _, source = credentials.get_token()
-    typer.echo({"env": f"from ${credentials.ENV_VAR}", "keyring": "from the system keyring",
-                "none": "not set"}[source])
+    if source == "dotenv" and (found := credentials.dotenv_token()):
+        typer.echo(f"from {found[1]}")
+        return
+    typer.echo({"env": "from the environment", "keyring": "from the system keyring",
+                "none": "not set"}.get(source, source))
 
 
 if __name__ == "__main__":

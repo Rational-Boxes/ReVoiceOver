@@ -8,6 +8,7 @@ from narration import credentials
 
 SOURCE_TEXT = {
     "env": f"In use: ${credentials.ENV_VAR} from the environment (it overrides the keyring).",
+    "dotenv": "In use: token from a .env file (it overrides the keyring).",
     "keyring": "In use: token stored in the system keyring.",
     "none": "No token set. Stages that call DeepInfra will fail until one is stored.",
 }
