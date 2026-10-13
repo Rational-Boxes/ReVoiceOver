@@ -94,3 +94,16 @@ def make_asr(client: DeepInfraClient, model: str, *, timeout_s: float = 900.0) -
     if "timestamped" in model:
         return WhisperTimestamped(client, model, timeout_s=timeout_s)
     raise ValueError(f"{model}: only whisper-timestamped models provide word timings")
+
+
+async def transcribe_text(client: DeepInfraClient, model: str, audio: Path, *,
+                          language: str | None = None, timeout_s: float = 300.0) -> dict[str, Any]:
+    """Plain transcription (any Whisper model); the text is in ``raw["text"]``."""
+    data = {"language": language} if language else {}
+    response = await client.request(
+        "POST", f"/v1/inference/{model}",
+        files={"audio": (audio.name, audio.read_bytes(), "audio/wav")},
+        data=data, timeout=timeout_s,
+    )
+    raw: dict[str, Any] = response.json()
+    return raw

@@ -1,0 +1,124 @@
+import asyncio
+import base64
+import io
+import json
+
+import httpx
+import numpy as np
+import pytest
+import soundfile as sf
+
+from narration import artifacts
+from narration.clients import deepinfra
+from narration.config import load_config
+from narration.context import RunContext
+from narration.pipeline import Outcome, run_pipeline
+from narration.stages.qa import normalize_for_wer, too_many_errors, word_error_rate
+from narration.stages.synth import current_clips
+from narration.types import Unit
+
+
+def test_normalization():
+    assert normalize_for_wer("Date: October 12th, 2026!") == "date october 12 2026"
+    assert word_error_rate("sub-scored", "subscored") == 0.0
+    assert word_error_rate("Workspace wide.", "workspace-wide.") == 0.0
+    assert word_error_rate("", "") == 0.0
+    assert word_error_rate("AIA", "") == 1.0
+
+
+def test_flag_rule():
+    assert not too_many_errors("We'll pull all candidate", 0.25, 0.15)   # one word off
+    assert too_many_errors("that the USGBC expects as", 0.4, 0.15)       # two of five
+    assert too_many_errors("AIA", 1.0, 0.15)                             # nothing heard
+    long = " ".join(["word"] * 20)
+    assert not too_many_errors(long, 0.15, 0.15)  # 3 errors of 20 is at the limit
+    assert too_many_errors(long, 0.2, 0.15)
+
+
+def wav_bytes(seconds, amp=0.3, gap=None):
+    rate = 44100
+    t = np.arange(int(seconds * rate)) / rate
+    y = amp * np.sin(2 * np.pi * 220 * t)
+    if gap:
+        y[int(gap[0] * rate):int(gap[1] * rate)] = 0
+    buf = io.BytesIO()
+    sf.write(buf, y.astype(np.float32), rate, format="WAV")
+    return buf.getvalue()
+
+
+@pytest.fixture
+def qa_ctx(tmp_path, monkeypatch):
+    video = tmp_path / "v.mp4"
+    video.write_text("v")
+    ctx = RunContext(video=video, work_dir=tmp_path / "w", config=load_config())
+    ctx.config.qa.max_silence_s = 0.5  # the "It is saved." takes contain a 0.8 s gap
+    units = [Unit("u0001", 0, 2, 2.5, "open the panel", "Open the panel.", "Open the panel."),
+             Unit("u0002", 2.5, 4, 5, "click deploy now", "Click deploy now.", "x"),
+             Unit("u0003", 5, 7, 8, "it is saved", "It is saved.", "x")]
+    artifacts.write_json(ctx.path("script.json"), {"units": [u.to_dict() for u in units]})
+    artifacts.write_json(ctx.path("voice.json"), {"voice_id": "v1"})
+    # What the "ASR" hears for each seed of each unit's take.
+    heard = {("Open the panel.", 42): "open the panel",
+             ("Click deploy now.", 42): "", ("Click deploy now.", 43): "click deploy now",
+             ("It is saved.", 42): "it", ("It is saved.", 43): "it",
+             ("It is saved.", 44): "it", ("It is saved.", 45): "it"}
+    clips_by_audio: dict[bytes, tuple[str, int]] = {}
+    calls = {"tts": 0, "asr": 0}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if "Zonos" in request.url.path:
+            calls["tts"] += 1
+            body = json.loads(request.content)
+            # Distinct audio per (text, seed) so the cache and ASR can tell takes apart.
+            seconds = 1.0 + body["seed"] / 100 + len(body["text"]) / 1000
+            audio = wav_bytes(seconds, gap=(0.1, 0.9) if body["text"] == "It is saved." else None)
+            return httpx.Response(200, json={
+                "audio": "data:audio/wav;base64," + base64.b64encode(audio).decode()})
+        calls["asr"] += 1
+        # Identify the clip by its duration (set above from seed and text).
+        data, rate = sf.read(io.BytesIO(_upload(request)))
+        seconds = len(data) / rate
+        match = min(heard, key=lambda k: abs(1.0 + k[1] / 100 + len(k[0]) / 1000 - seconds))
+        return httpx.Response(200, json={"text": heard[match],
+                                         "inference_status": {"cost": 0.001}})
+
+    original = deepinfra.DeepInfraClient.from_context.__func__
+
+    def from_context(cls, ctx, **kw):
+        monkeypatch.setenv("DEEPINFRA_TOKEN", "t")
+        return original(cls, ctx, transport=httpx.MockTransport(handler), **kw)
+
+    monkeypatch.setattr(deepinfra.DeepInfraClient, "from_context", classmethod(from_context))
+    return ctx, calls, clips_by_audio
+
+
+def _upload(request: httpx.Request) -> bytes:
+    body = request.content
+    start = body.index(b"RIFF")
+    end = body.rindex(b"\r\n--")
+    return body[start:end]
+
+
+def test_qa_retries_keeps_best_take_and_flags(qa_ctx):
+    ctx, calls, _ = qa_ctx
+    assert asyncio.run(run_pipeline(ctx, start="synth", stop="synth")).outcome \
+        is Outcome.COMPLETED
+    result = asyncio.run(run_pipeline(ctx, start="qa", stop="qa"))
+    assert result.outcome is Outcome.COMPLETED, result.error
+
+    qa = artifacts.read_json(ctx.path("qa.json"))["units"]
+    assert qa["u0001"]["wer"] == 0 and qa["u0001"]["flags"] == [] and qa["u0001"]["retries"] == 0
+    assert qa["u0002"]["retries"] == 1 and qa["u0002"]["take"]["seed"] == 43
+    assert qa["u0002"]["flags"] == []
+    assert qa["u0003"]["retries"] == 3 and "wer" in qa["u0003"]["flags"]
+    assert "silence" in qa["u0003"]["flags"]
+
+    clips = current_clips(ctx.work_dir)
+    assert clips["u0002"]["seed"] == 43            # QA's take wins over synth.json
+    assert clips["u0001"]["seed"] == 42
+
+    # Re-running QA is free: every take and transcript is cached.
+    before = dict(calls)
+    asyncio.run(run_pipeline(ctx, start="qa", stop="qa"))
+    assert calls == before
+    assert artifacts.read_json(ctx.path("qa.json"))["units"]["u0002"]["take"]["seed"] == 43

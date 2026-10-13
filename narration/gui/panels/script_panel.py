@@ -10,11 +10,11 @@ from typing import Any
 import wx
 import wx.dataview as dv
 
-from narration import artifacts
 from narration.gui import icons
 from narration.gui.models.script_model import ScriptModel
 from narration.gui.models.timeline_model import format_time
 from narration.gui.panels.unit_editor import EditorCallbacks, UnitEditor
+from narration.stages.synth import current_clips
 from narration.types import Unit
 
 PAGE_EMPTY, PAGE_SCRIPT = 0, 1
@@ -129,11 +129,7 @@ class ScriptPanel(wx.Panel):
     def load_clips(self) -> None:
         if self.model.work_dir is None:
             return
-        try:
-            data = artifacts.read_json(self.model.work_dir / "synth.json")
-            self.clips = dict(data.get("units", {}))
-        except (FileNotFoundError, artifacts.SchemaError):
-            self.clips = {}
+        self.clips = current_clips(self.model.work_dir)
         if self.editor.unit is not None:
             self.editor.show(self.model.get(self.editor.unit.id),
                              self.clips.get(self.editor.unit.id))

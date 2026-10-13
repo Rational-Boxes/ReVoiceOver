@@ -83,7 +83,7 @@ def test_bad_range(fake_stages):
 
 def test_stub_stage_reports_not_implemented(fake_stages, monkeypatch):
     ctx, _ = fake_stages
-    stub = importlib.reload(importlib.import_module("narration.stages.qa"))
+    stub = importlib.reload(importlib.import_module("narration.stages.fit"))
     monkeypatch.setattr(stub, "run", stub.run)
-    result = asyncio.run(run_pipeline(ctx, start="qa"))
-    assert result.outcome is Outcome.NOT_IMPLEMENTED and result.last_stage == "qa"
+    result = asyncio.run(run_pipeline(ctx, start="fit"))
+    assert result.outcome is Outcome.NOT_IMPLEMENTED and result.last_stage == "fit"

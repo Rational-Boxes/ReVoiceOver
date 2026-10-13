@@ -14,6 +14,7 @@ import re
 import tomllib
 from dataclasses import asdict, dataclass
 from pathlib import Path
+from typing import Any
 
 from narration import artifacts
 from narration.cache import FileCache, make_key
@@ -147,3 +148,25 @@ async def resynth(ctx: RunContext, unit: Unit, seed: int | None = None) -> Clip:
     ctx.info(f"{unit.id}: new take (seed {clip.seed}), {clip.duration:.1f}s"
              + ("" if clip.cached else f", {clip.chars} chars"))
     return clip
+
+
+def current_clips(work_dir: Path) -> dict[str, dict[str, Any]]:
+    """synth.json clips with QA's chosen takes laid over them.
+
+    QA may keep a retry take; it records that in qa.json (not synth.json, which
+    is QA's own input) and leaves the take's audio in tts/<id>.wav.
+    """
+    try:
+        clips: dict[str, dict[str, Any]] = dict(
+            artifacts.read_json(work_dir / "synth.json")["units"])
+    except (FileNotFoundError, artifacts.SchemaError):
+        return {}
+    try:
+        qa = artifacts.read_json(work_dir / "qa.json")["units"]
+    except (FileNotFoundError, artifacts.SchemaError):
+        return clips
+    for uid, entry in qa.items():
+        take = entry.get("take")
+        if uid in clips and take:
+            clips[uid] = {**clips[uid], **take}
+    return clips

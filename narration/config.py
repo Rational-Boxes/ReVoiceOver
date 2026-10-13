@@ -40,6 +40,9 @@ class Models(_Section):
     llm: str = "Qwen/Qwen3-235B-A22B-Instruct-2507"
     tts: str = "Zyphra/Zonos-v0.1-hybrid"
     tts_alternate: str = "Audio8/Audio8-TTS-Preview-0.6b"
+    # QA re-transcription of synthesized clips: plain text is enough, and turbo
+    # is billed per input second rather than by runtime.
+    asr_qa: str = "openai/whisper-large-v3-turbo"
 
 
 class Prices(_Section):
@@ -109,6 +112,8 @@ class Fit(_Section):
 class QA(_Section):
     max_wer: float = 0.15
     max_retries: int = 3
+    max_silence_s: float = Field(1.5, description="longest silence allowed inside a clip")
+    silence_db: float = -45.0
 
 
 class Config(_Section):
