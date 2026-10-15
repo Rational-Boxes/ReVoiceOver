@@ -31,9 +31,11 @@ ENV = {"sys_platform": "linux", "platform_system": "Linux", "os_name": "posix",
        "implementation_name": "cpython", "platform_python_implementation": "CPython",
        "python_version": "3.13", "python_full_version": "3.13.0"}
 # wxPython's build requirements (from its pyproject.toml) and their dependencies.
+# Packages the app also needs (idna, certifi) are left out: this module's files
+# are cleaned up after the build, which would delete the app's copies of them.
+# The app's python3-deps module is installed first and provides them instead.
 WX_BUILD = ["setuptools==80.9.0", "cython==3.1.4", "sip==6.12.0", "packaging==25.0",
-            "requests==2.32.5", "charset-normalizer==3.4.3", "idna==3.10",
-            "urllib3==2.5.0", "certifi==2025.8.3"]
+            "requests==2.32.5", "charset-normalizer==3.4.3", "urllib3==2.5.0"]
 
 
 def pins(lines: list[str]) -> list[tuple[str, str]]:
@@ -99,7 +101,8 @@ def source(f: dict, arch: str | None = None) -> dict:
     return out
 
 
-def module(name: str, packages: list[tuple[str, str]], **extra: object) -> dict:
+def module(name: str, packages: list[tuple[str, str]], pip_flags: str = "",
+           **extra: object) -> dict:
     sources = [s for n, v in packages for s in pick(n, v)]
     names = " ".join(f'"{n}=={v}"' for n, v in packages)
     return {
@@ -107,7 +110,7 @@ def module(name: str, packages: list[tuple[str, str]], **extra: object) -> dict:
         "buildsystem": "simple",
         "build-commands": [
             "pip3 install --verbose --ignore-installed --no-index --find-links=\"file://${PWD}\" "
-            f"--prefix=${{FLATPAK_DEST}} --no-build-isolation {names}"],
+            f"--prefix=${{FLATPAK_DEST}} --no-build-isolation {pip_flags}{names}"],
         "sources": sources,
         **extra,
     }
@@ -116,9 +119,14 @@ def module(name: str, packages: list[tuple[str, str]], **extra: object) -> dict:
 def main() -> None:
     app = pins(REQUIREMENTS.read_text().splitlines())
     write(HERE / "python3-deps.json", module("python3-deps", app))
-    # Only needed while building wxPython; removed from the finished app.
+    # Only needed while building wxPython; removed from the finished app, so it
+    # must not install anything the app uses (cleanup would delete those files).
+    app_names = {canonicalize_name(n) for n, _ in app}
+    wx_build = pins(WX_BUILD)
+    if shared := [n for n, _ in wx_build if canonicalize_name(n) in app_names]:
+        sys.exit(f"WX_BUILD shares packages with the app: {', '.join(shared)}")
     write(HERE / "python3-wx-build-deps.json",
-          module("python3-wx-build-deps", pins(WX_BUILD), cleanup=["*"]))
+          module("python3-wx-build-deps", wx_build, pip_flags="--no-deps ", cleanup=["*"]))
 
 
 def write(path: Path, data: dict) -> None:

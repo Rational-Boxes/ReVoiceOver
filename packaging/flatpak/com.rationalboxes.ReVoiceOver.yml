@@ -60,6 +60,9 @@ modules:
         sha256: 7138d28c96d9d3e3af4ee3d8cad72741f8ffb40da90c1112235dea3ecd3178a3
     cleanup: [/share]
 
+  # Before the wx build deps: they rely on its idna and certifi (see gen_python_deps.py).
+  - python3-deps.json
+
   - python3-wx-build-deps.json
 
   - name: wxpython
@@ -73,8 +76,6 @@ modules:
         sha256: 2eb123979c87bcb329e8a2452269d60ff8f9f651e9bf25c67579e53c4ebbae3c
     cleanup:
       - /bin
-
-  - python3-deps.json
 
   - name: revoiceover
     buildsystem: simple
