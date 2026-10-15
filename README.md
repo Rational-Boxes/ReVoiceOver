@@ -207,11 +207,10 @@ Re-runs only pay for what changed.
 
 ## Status
 
-Working end to end in anchor timing: you can produce a finished, re-narrated
-video with subtitles from the app or the command line. Still to come (see
-[`design_documents/`](design_documents)):
+Working end to end in anchor and compact timing: you can produce a finished,
+re-narrated video with subtitles from the app or the command line. Still to come
+(see [`design_documents/`](design_documents)):
 
-- *compact* timing that also removes dead air from the video
 - patch mode (keep your original voice where it was already clean),
   room-tone bed and crossfades
 - export dialog, in-app video preview and a settings dialog

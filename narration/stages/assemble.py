@@ -1,8 +1,8 @@
 """[8] assemble: build the narration track and the final video + subtitles.
 
-With no video stretches the video stream is copied untouched; otherwise the
-video is cut into the timeline's segments, slowed where needed, and encoded
-once with the best available H.264 encoder.
+When the timeline keeps the whole video at normal speed the video stream is
+copied untouched; otherwise the video is cut into the timeline's segments,
+slowed where needed, and encoded once with the best available H.264 encoder.
 """
 
 from __future__ import annotations
@@ -76,6 +76,19 @@ def video_filter(segments: list[dict[str, Any]]) -> str:
     return ";".join(parts)
 
 
+def video_unchanged(segments: list[dict[str, Any]], source_duration: float) -> bool:
+    """True when the segments play the whole source, in order, at normal speed."""
+    if not segments:
+        return True
+    pos = 0.0
+    for s in segments:
+        if abs(s["src_start"] - pos) > 1e-3 or abs(s["out_start"] - pos) > 1e-3 \
+                or abs((s["out_end"] - s["out_start"]) - (s["src_end"] - s["src_start"])) > 1e-3:
+            return False
+        pos = s["src_end"]
+    return abs(pos - source_duration) < 1e-2
+
+
 def _video_bitrate(probe: dict[str, Any], configured: str) -> str:
     if configured:
         return configured
@@ -110,10 +123,8 @@ def run(ctx: RunContext) -> None:
     out = ctx.path("clean.mp4")
     tmp = out.with_suffix(".partial.mp4")
     audio_args = ["-c:a", "aac", "-b:a", cfg.assemble.audio_bitrate]
-    stretched = any(abs((s["out_end"] - s["out_start"]) - (s["src_end"] - s["src_start"]))
-                    > 1e-3 for s in segments)
-    if not stretched:
-        ctx.info("no video stretches: copying the video stream")
+    if video_unchanged(segments, float(timeline["source_duration"])):
+        ctx.info("no video stretches or cuts: copying the video stream")
         ffmpeg.run(["-i", str(ctx.video), "-i", str(narration), "-map", "0:v:0", "-map", "1:a:0",
                     "-c:v", "copy", *audio_args, "-shortest", "-movflags", "+faststart",
                     str(tmp)], cancel=ctx.cancel, on_progress=progress)
@@ -124,7 +135,7 @@ def run(ctx: RunContext) -> None:
                                "a hardware encoder); see Help > Troubleshooting")
         bitrate = _video_bitrate(probe, cfg.assemble.video_bitrate)
         ctx.info(f"re-encoding video with {encoder} at {bitrate} "
-                 f"({len(segments)} segments, slowed where clips needed room)")
+                 f"({len(segments)} segments, {timeline.get('timing', 'anchor')} timing)")
         script = ctx.path("assemble_filter.txt")
         artifacts.atomic_write_text(script, video_filter(segments))
         ffmpeg.run(["-i", str(ctx.video), "-i", str(narration),

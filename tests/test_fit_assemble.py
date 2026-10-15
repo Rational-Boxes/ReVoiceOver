@@ -12,8 +12,14 @@ from narration.config import load_config
 from narration.context import RunContext
 from narration.media import ffmpeg
 from narration.pipeline import Outcome, run_pipeline
-from narration.stages.assemble import format_srt_time, srt, unit_cues, video_filter
-from narration.stages.fit import merge_segments, plan_anchor
+from narration.stages.assemble import format_srt_time, srt, unit_cues, video_filter, video_unchanged
+from narration.stages.fit import (
+    added_words,
+    content_spans,
+    merge_segments,
+    plan_anchor,
+    plan_compact,
+)
 from narration.types import Unit
 
 
@@ -64,6 +70,61 @@ def test_srt_and_filter():
     assert "setpts=PTS-STARTPTS[v0]" in f and "*2.000000" in f and "concat=n=2" in f
 
 
+def test_added_words_tolerates_typos():
+    assert added_words("choose and select", "choose and select a meterial") == ["meterial"]
+    assert added_words("the whole product", "the products") == []
+
+
+def test_words_moved_out_of_an_emptied_line_are_found():
+    units = [Unit("u0001", 0.0, 2.0, 2.5, "here we can choose and select", "x"),
+             Unit("u0002", 2.5, 4.0, 5.0, "select materials", ""),        # moved back
+             Unit("u0003", 5.0, 6.0, 7.0, "um never mind", ""),           # dropped
+             Unit("u0004", 7.0, 8.0, 9.0, "the details panel", ""),       # moved forward
+             Unit("u0005", 9.0, 10.0, 12.0, "opens on the right", "x")]
+    groups = [Unit("g1", 0.0, 2.0, 7.0, "", "Here we can choose and select a meterial."),
+              Unit("g2", 9.0, 10.0, 12.0, "", "The details panel opens on the right.")]
+    spans, moved = content_spans(units, groups, {"g1": ["u0001"], "g2": ["u0005"]}, 12.0)
+    assert moved == {"u0002": "g1", "u0004": "g2"}
+    assert [(g.id, g.start, g.end, g.slot_end) for g in spans] == [
+        ("g1", 0.0, 4.0, 7.0), ("g2", 7.0, 10.0, 12.0)]
+
+
+def test_plan_compact_cuts_pauses_and_keeps_covered_video():
+    units = [U(1, 2.0, 5.0, 10.0), U(2, 10.0, 12.0, 13.0), U(3, 13.0, 14.0, 20.0)]
+    clips = {"u0001": 2.0,   # shorter than the 3 s it covers: the video is still kept
+             "u0002": 2.5,   # needs 0.5 s more than its speech: runs into the pause
+             "u0003": 4.0}   # 3 s longer than its speech: keeps more of the pause
+    entries, segments = plan_compact(units, clips, 20.0,
+                                     FitConfig(timing="compact", compact_gap_s=0.5,
+                                               max_atempo=1.0))
+    e = {x.unit_id: x for x in entries}
+    # 0.5 s lead-in; the 5.5-10 s pause and everything after 17.5 s are cut.
+    assert [(s.src_start, s.src_end) for s in segments] == [(1.5, 5.5), (10.0, 17.5)]
+    assert e["u0001"].out_start == 0.5 and e["u0001"].src_end == 5.5
+    assert e["u0002"].out_start == 4.0 and e["u0002"].src_end == 13.0
+    assert e["u0002"].atempo == 1.0 and e["u0002"].video_stretch == 1.0
+    assert e["u0003"].out_start == 7.0 and e["u0003"].src_end == 17.5
+    assert segments[-1].out_end == pytest.approx(11.5)   # 20 s of source -> 11.5 s
+
+
+def test_plan_compact_stretches_when_the_next_group_is_too_close():
+    units = [U(1, 0.0, 1.0, 1.2), U(2, 1.2, 2.0, 3.0)]
+    entries, segments = plan_compact(units, {"u0001": 2.0, "u0002": 0.5}, 3.0,
+                                     FitConfig(timing="compact", compact_gap_s=0.2,
+                                               max_atempo=1.0))
+    assert entries[0].video_stretch == pytest.approx(2.2 / 1.2, abs=1e-3)
+    assert entries[1].out_start == pytest.approx(2.2)
+
+
+def test_video_unchanged():
+    whole = [{"src_start": 0, "src_end": 5, "out_start": 0, "out_end": 5}]
+    assert video_unchanged(whole, 5.0) and video_unchanged([], 5.0)
+    assert not video_unchanged(whole, 8.0)                        # tail cut
+    cut = [{"src_start": 0, "src_end": 2, "out_start": 0, "out_end": 2},
+           {"src_start": 3, "src_end": 5, "out_start": 2, "out_end": 4}]
+    assert not video_unchanged(cut, 5.0)
+
+
 def _tts_like(seconds: float, lead: float = 0.3) -> np.ndarray:
     """A clip with silence around it, like Zonos output."""
     rate = 44100
@@ -72,11 +133,13 @@ def _tts_like(seconds: float, lead: float = 0.3) -> np.ndarray:
     return np.concatenate([pad, tone, pad]).astype(np.float32)
 
 
-@pytest.mark.parametrize("stretch", [False, True])
-def test_fit_and_assemble_end_to_end(demo_video, tmp_path, stretch):
-    if stretch and ffmpeg.h264_encoder() is None:
+@pytest.mark.parametrize("stretch,compact", [(False, False), (True, False), (False, True)])
+def test_fit_and_assemble_end_to_end(demo_video, tmp_path, stretch, compact):
+    if (stretch or compact) and ffmpeg.h264_encoder() is None:
         pytest.skip("no H.264 encoder")
     ctx = RunContext(video=demo_video, work_dir=tmp_path / "w", config=load_config())
+    if compact:
+        ctx.config.fit.timing = "compact"
     asyncio.run(run_pipeline(ctx, stop="extract"))
     units = [U(1, 0.5, 2.5, 3.5, "One."), U(2, 3.5, 4.0, 4.5, ""), U(3, 4.5, 6.0, 8.0, "Two.")]
     artifacts.write_json(ctx.path("script.json"), {"units": [u.to_dict() for u in units]})
@@ -112,7 +175,12 @@ def test_fit_and_assemble_end_to_end(demo_video, tmp_path, stretch):
     assert not list(ctx.path("fitted").glob("*.mute.wav"))
     out = ffmpeg.probe(ctx.path("clean.mp4"))
     assert out.has_video and out.has_audio
-    if stretch:
+    if compact:
+        # Kept: 0.35 s lead-in, 0.5-2.85 s and 4.5-6.35 s; the rest is cut.
+        assert timeline["timing"] == "compact"
+        assert timeline["output_duration"] == pytest.approx(4.55, abs=0.05)
+        assert out.duration == pytest.approx(4.55, abs=0.25)
+    elif stretch:
         assert first["video_stretch"] > 1.0
         assert out.duration == pytest.approx(timeline["output_duration"], abs=0.25)
         assert out.duration > 8.15  # stretched beyond the 8 s source (10 fps rounding)
@@ -122,4 +190,5 @@ def test_fit_and_assemble_end_to_end(demo_video, tmp_path, stretch):
     cues = ctx.path("clean.srt").read_text()
     assert cues.count("-->") == 2 and "One." in cues and "Two." in cues
     track, _ = sf.read(io.BytesIO(ctx.path("narration.wav").read_bytes()))
-    assert np.abs(track[: int(0.4 * 44100)]).max() < 1e-3   # silent before u0001 starts
+    silent = int((first["out_start"] - 0.1) * 44100)
+    assert np.abs(track[:silent]).max() < 1e-3   # silent before u0001 starts
