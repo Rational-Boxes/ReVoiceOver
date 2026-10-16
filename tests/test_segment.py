@@ -38,11 +38,11 @@ def test_splits_on_sentence_end_and_pause():
 
 
 def test_short_unit_merges_forward_when_pause_is_short():
-    words = (seq("This is the new release of Green Canary.") + seq("date.", start=3.0)
+    words = (seq("This is the new release of Acme Cloud.") + seq("date.", start=3.0)
              + seq("October 12th, 2026.", start=3.8))
     units = build_units(words, 6.0, SegmentConfig())
     assert [u.raw_text for u in units] == [
-        "This is the new release of Green Canary.", "date. October 12th, 2026."]
+        "This is the new release of Acme Cloud.", "date. October 12th, 2026."]
 
 
 def test_short_unit_kept_when_pause_is_long():

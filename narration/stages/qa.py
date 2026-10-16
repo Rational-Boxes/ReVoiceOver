@@ -106,7 +106,7 @@ def speech_spans(expected: str, words: list[dict[str, Any]]) -> list[tuple[float
     """Where the script is spoken: heard words that align with script words.
 
     Unscripted words count only when they run on from scripted ones (Whisper
-    splits "AI-based" or "GreenCanary"). Isolated ones ("Bye.", "*Squeak*", a
+    splits "AI-based" or "AcmeCloud"). Isolated ones ("Bye.", "*Squeak*", a
     lone "you") are the voice's noises, as are words with no letters at all.
     """
     ref = normalize_for_wer(expected).split()

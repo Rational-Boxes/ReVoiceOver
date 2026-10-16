@@ -19,8 +19,8 @@ For each unit's text:
   words between units. Fix capitalization and punctuation within the unit
   only where it helps it read naturally.
 - Write glossary terms exactly as listed (capitalization and spelling),
-  including when the transcript has a near-miss ("green canary" → "Green
-  Canary").
+  including when the transcript has a near-miss ("acme cloud" → "Acme
+  Cloud").
 - Leave numbers, versions, file names, URLs and code as they are written.
 - If a unit is nothing but filler or noise, return an empty string for it.
 - If a unit is already clean, return it unchanged.

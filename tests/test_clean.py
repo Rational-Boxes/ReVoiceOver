@@ -81,13 +81,13 @@ def test_parse_json_reply():
 def clean_ctx(tmp_path, monkeypatch):
     video = tmp_path / "talk.mp4"
     video.write_text("v")
-    (tmp_path / "glossary.txt").write_text("Green Canary\n")
+    (tmp_path / "glossary.txt").write_text("Acme Cloud\n")
     ctx = RunContext(video=video, work_dir=tmp_path / "w", config=load_config())
     ctx.config.clean.batch_size = 2
-    units = [U(1, "so um green canary is, uh, new"), U(2, "uh, um"), U(3, "Open the panel.")]
+    units = [U(1, "so um acme cloud is, uh, new"), U(2, "uh, um"), U(3, "Open the panel.")]
     artifacts.write_json(ctx.path("units.json"), [u.to_dict() for u in units])
     requests: list[dict] = []
-    replies = {"u0001": "Green Canary is new.", "u0002": "", "u0003": "Open the panel."}
+    replies = {"u0001": "Acme Cloud is new.", "u0002": "", "u0003": "Open the panel."}
     bad_once = {"left": 1}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -119,16 +119,16 @@ def test_clean_stage_end_to_end(clean_ctx):
     assert result.outcome is Outcome.COMPLETED, result.error
     assert len(requests) == 3  # two batches, one retried
     sent = json.loads(requests[0]["messages"][1]["content"])
-    assert sent["glossary"] == ["Green Canary"]
+    assert sent["glossary"] == ["Acme Cloud"]
     assert requests[0]["response_format"] == {"type": "json_object"}
 
     data = artifacts.read_json(ctx.path("script.json"))
     units = {u["id"]: u for u in data["units"]}
-    assert units["u0001"]["clean_text"] == "Green Canary is new."
+    assert units["u0001"]["clean_text"] == "Acme Cloud is new."
     assert units["u0002"]["flags"] == ["dropped"]
     assert units["u0003"]["keep_original"] is True
     md = ctx.path("script.md").read_text()
-    assert "~~so um~~ Green Canary is ~~uh,~~ new." in md
+    assert "~~so um~~ Acme Cloud is ~~uh,~~ new." in md
 
 
 def test_rerun_uses_cache_and_keeps_edits(clean_ctx):

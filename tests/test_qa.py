@@ -60,10 +60,10 @@ def W(word, start, end):
 
 def test_speech_spans_skip_the_voices_own_noises():
     words = [W(" *Crickets", 0.0, 0.5), W("*", 0.5, 0.5), W(" Bye.", 1.0, 1.3),
-             W(" Green", 2.0, 2.3), W(" Canary", 2.3, 2.7), W(" is", 2.7, 2.8),
+             W(" Acme", 2.0, 2.3), W(" Cloud", 2.3, 2.7), W(" is", 2.7, 2.8),
              W(" live.", 2.8, 3.2), W(" you", 4.0, 4.4)]
-    # "Canary" is unscripted ("GreenCanary") but runs on from scripted words.
-    assert speech_spans("GreenCanary is live.", words) == \
+    # "Cloud" is unscripted ("AcmeCloud") but runs on from scripted words.
+    assert speech_spans("AcmeCloud is live.", words) == \
         [(2.0, 2.3), (2.3, 2.7), (2.7, 2.8), (2.8, 3.2)]
     assert speech_spans("Anything.", []) == []
 
