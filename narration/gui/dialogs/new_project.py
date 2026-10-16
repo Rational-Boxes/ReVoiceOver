@@ -37,6 +37,13 @@ class NewProjectDialog(wx.Dialog):
         self.timing = wx.RadioBox(self, label="Timing", choices=[t[1] for t in TIMING_CHOICES],
                                   majorDimension=1, style=wx.RA_SPECIFY_COLS)
         self.timing.SetSelection([t[0] for t in TIMING_CHOICES].index(cfg.fit.timing))
+        # Compact timing: which silences are cut, and how much video stays around speech.
+        self.min_silence = self._seconds(cfg.fit.compact_min_silence_s,
+                                         "Silences at least this long are cut from the video")
+        self.pad_before = self._seconds(cfg.fit.compact_pad_before_s,
+                                        "Video kept before speech that follows a cut")
+        self.pad_after = self._seconds(cfg.fit.compact_pad_after_s,
+                                       "Video kept after speech that precedes a cut")
         self._tts_models = list(dict.fromkeys([cfg.models.tts, cfg.models.tts_alternate]))
         self.tts = wx.Choice(self, choices=self._tts_models)
         self.tts.SetSelection(0)
@@ -55,6 +62,12 @@ class NewProjectDialog(wx.Dialog):
         sizer.Add(form, 0, wx.EXPAND | wx.ALL, 12)
         sizer.Add(hint, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 12)
         sizer.Add(self.timing, 0, wx.EXPAND | wx.ALL, 12)
+        compact_row = wx.BoxSizer(wx.HORIZONTAL)
+        for item in ("Compact: cut silences of at least", self.min_silence, "s, keeping",
+                     self.pad_before, "s before and", self.pad_after, "s after speech"):
+            ctrl = wx.StaticText(self, label=item) if isinstance(item, str) else item
+            compact_row.Add(ctrl, 0, wx.ALIGN_CENTER_VERTICAL | wx.RIGHT, 6)
+        sizer.Add(compact_row, 0, wx.LEFT | wx.RIGHT, 12)
         buttons = self.CreateStdDialogButtonSizer(wx.OK | wx.CANCEL | wx.HELP)
         self.FindWindowById(wx.ID_OK).SetLabel("Create")
         sizer.Add(buttons, 0, wx.EXPAND | wx.ALL, 12)
@@ -65,6 +78,7 @@ class NewProjectDialog(wx.Dialog):
 
         self.video.Bind(wx.EVT_FILEPICKER_CHANGED, self._on_video)
         self.work_dir.Bind(wx.EVT_DIRPICKER_CHANGED, self._on_work_dir)
+        self.timing.Bind(wx.EVT_RADIOBOX, lambda _e: self._update_compact())
         self.Bind(wx.EVT_BUTTON, self._on_ok, id=wx.ID_OK)
         self.Bind(wx.EVT_BUTTON, lambda _e: show_help("getting-started#new-project"),
                   id=wx.ID_HELP)
@@ -72,6 +86,21 @@ class NewProjectDialog(wx.Dialog):
             self.video.SetPath(str(video))
             self._suggest_work_dir()
         self._update_ok()
+        self._update_compact()
+
+    def _seconds(self, value: float, tip: str) -> wx.SpinCtrlDouble:
+        ctrl = wx.SpinCtrlDouble(self, min=0.0, max=30.0, initial=value, inc=0.05,
+                                 size=wx.Size(90, -1))
+        ctrl.SetDigits(2)
+        ctrl.SetToolTip(tip)
+        return ctrl
+
+    def _compact(self) -> bool:
+        return TIMING_CHOICES[self.timing.GetSelection()][0] == "compact"
+
+    def _update_compact(self) -> None:
+        for ctrl in (self.min_silence, self.pad_before, self.pad_after):
+            ctrl.Enable(self._compact())
 
     def _on_video(self, _event: wx.Event) -> None:
         self._suggest_work_dir()
@@ -106,6 +135,9 @@ class NewProjectDialog(wx.Dialog):
 
     def overrides(self) -> dict[str, dict[str, Any]]:
         return {
-            "fit": {"timing": TIMING_CHOICES[self.timing.GetSelection()][0]},
+            "fit": {"timing": TIMING_CHOICES[self.timing.GetSelection()][0],
+                    "compact_min_silence_s": round(self.min_silence.GetValue(), 2),
+                    "compact_pad_before_s": round(self.pad_before.GetValue(), 2),
+                    "compact_pad_after_s": round(self.pad_after.GetValue(), 2)},
             "models": {"tts": self._tts_models[self.tts.GetSelection()]},
         }

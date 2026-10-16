@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import tomli_w
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CONFIG_NAME = "narr.toml"
 
@@ -111,8 +111,21 @@ class Synth(_Section):
 class Fit(_Section):
     timing: Literal["anchor", "compact"] = "anchor"
     max_atempo: float = Field(1.15, ge=1.0, le=2.0, description="most a clip is sped up")
-    compact_gap_s: float = 0.35
+    # Compact timing cuts every silence at least compact_min_silence_s long out of the
+    # video, keeping this much of it before and after the speech on either side.
+    compact_min_silence_s: float = Field(1.0, ge=0, description="shorter pauses are kept")
+    compact_pad_before_s: float = Field(0.2, ge=0, description="video kept before speech")
+    compact_pad_after_s: float = Field(0.35, ge=0, description="video kept after speech")
     trim_db: float = Field(-50.0, description="silence threshold for trimming clip edges")
+
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed(cls, data: Any) -> Any:
+        if isinstance(data, dict) and "compact_gap_s" in data:  # before the pads were split
+            data = dict(data)
+            data.setdefault("compact_pad_after_s", data.pop("compact_gap_s"))
+        return data
 
 
 class Assemble(_Section):

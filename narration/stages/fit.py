@@ -6,10 +6,12 @@ original speech started. A clip that is too long is first sped up (up to
 that slice of video down.
 
 ``compact`` timing also removes dead air: each group keeps the stretch of video
-its words cover (plus ``fit.compact_gap_s``), and the pauses between groups and
-the video under dropped lines are cut. A line that was emptied because its words
-were moved into a neighbouring line still counts as covered by that neighbour, so
-the on-screen action those words describe is kept.
+its words cover, and every silence of at least ``fit.compact_min_silence_s``
+around it (pauses, and the video under dropped lines) is cut, keeping
+``fit.compact_pad_before_s`` / ``fit.compact_pad_after_s`` around the speech.
+A line that was emptied because its words were moved into a neighbouring line
+still counts as covered by that neighbour, so the on-screen action those words
+describe is kept.
 
 Noises QA found in a clip are muted first. Writes fitted/<id>.wav and timeline.json.
 """
@@ -149,26 +151,36 @@ def plan_compact(units: list[Unit], clip_durations: dict[str, float], duration: 
                  cfg: FitConfig) -> tuple[list[TimelineEntry], list[Segment]]:
     """Speed factors, video cuts and output times for compact timing.
 
-    Each unit keeps its source video from ``start`` until its speech (the original
-    ``end``, or the new clip if that runs longer) plus ``compact_gap_s``, never past
-    ``slot_end``; everything else is cut. A clip that still does not fit is sped up
-    and then the video slowed, as in anchor timing.
+    A unit's speech runs from ``start`` to its original ``end``, or further if the
+    new clip is longer. Each silence from there to the next unit's ``start`` (and
+    the ones before the first unit and after the last) that is at least
+    ``compact_min_silence_s`` long is cut, keeping ``compact_pad_after_s`` after the
+    speech and ``compact_pad_before_s`` before the next; shorter silences are kept
+    whole. A clip that still does not fit is sped up and then the video slowed, as
+    in anchor timing.
     """
-    gap = cfg.compact_gap_s
+    before, after = cfg.compact_pad_before_s, cfg.compact_pad_after_s
+
+    def cut(silence: float, pads: float) -> bool:
+        return silence >= cfg.compact_min_silence_s and silence > pads
+
     entries: list[TimelineEntry] = []
     segments: list[Segment] = []
     out = 0.0
     if units and units[0].start > 0:
-        lead = min(units[0].start, gap)
-        segments.append(Segment(units[0].start - lead, units[0].start, 0.0, lead))
+        first = units[0].start
+        lead = before if cut(first, before) else first
+        segments.append(Segment(first - lead, first, 0.0, lead))
         out = lead
-    for u in units:
+    for i, u in enumerate(units):
         d = clip_durations.get(u.id)
-        speech = max(u.end - u.start, d or 0.0)
-        src_end = min(u.slot_end, u.start + speech + gap)
+        speech_end = min(u.slot_end, u.start + max(u.end - u.start, d or 0.0))
+        next_pad = before if i + 1 < len(units) else 0.0
+        cut_after = cut(u.slot_end - speech_end, after + next_pad)
+        src_end = speech_end + after if cut_after else u.slot_end
         src = max(1e-3, src_end - u.start)
-        # Room for the clip: up to the gap, or at least the original speech.
-        room = max(1e-3, src - gap, min(src, u.end - u.start))
+        # Room for the clip: up to the padding, or at least the original speech.
+        room = max(1e-3, src - after, min(src, u.end - u.start))
         atempo, out_slot = 1.0, src
         if d is not None and d > room:
             atempo = min(cfg.max_atempo, d / room)
@@ -181,6 +193,9 @@ def plan_compact(units: list[Unit], clip_durations: dict[str, float], duration: 
                 audio=f"{FITTED_DIR}/{u.id}.wav", atempo=round(atempo, 4),
                 video_stretch=round(out_slot / src, 4)))
         out += out_slot
+        if cut_after and next_pad > 0:
+            segments.append(Segment(u.slot_end - next_pad, u.slot_end, out, out + next_pad))
+            out += next_pad
     return entries, merge_segments(segments)
 
 

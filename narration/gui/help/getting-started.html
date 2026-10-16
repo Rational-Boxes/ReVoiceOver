@@ -48,7 +48,9 @@ window. Then pick:</p>
       voice cloning can be used for synthesis.</li>
   <li><b>Timing</b>: <i>Anchor</i> keeps each sentence where you originally said
       it (best for live demos). <i>Compact</i> also removes dead air
-      (best for slide narration).</li>
+      (best for slide narration): every silence at least as long as the threshold is
+      cut from the video, keeping the chosen padding before and after the speech
+      around it. Shorter pauses are kept whole.</li>
 </ul>
 <p>To reopen a project, use <b>File &gt; Open Project…</b> and choose its work
 folder, or pick it from <b>Open Recent</b>.</p>

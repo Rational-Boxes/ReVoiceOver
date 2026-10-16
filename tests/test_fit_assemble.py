@@ -94,23 +94,37 @@ def test_plan_compact_cuts_pauses_and_keeps_covered_video():
     clips = {"u0001": 2.0,   # shorter than the 3 s it covers: the video is still kept
              "u0002": 2.5,   # needs 0.5 s more than its speech: runs into the pause
              "u0003": 4.0}   # 3 s longer than its speech: keeps more of the pause
-    entries, segments = plan_compact(units, clips, 20.0,
-                                     FitConfig(timing="compact", compact_gap_s=0.5,
-                                               max_atempo=1.0))
+    cfg = FitConfig(timing="compact", compact_min_silence_s=1.0, compact_pad_before_s=0.5,
+                    compact_pad_after_s=0.5, max_atempo=1.0)
+    entries, segments = plan_compact(units, clips, 20.0, cfg)
     e = {x.unit_id: x for x in entries}
-    # 0.5 s lead-in; the 5.5-10 s pause and everything after 17.5 s are cut.
-    assert [(s.src_start, s.src_end) for s in segments] == [(1.5, 5.5), (10.0, 17.5)]
+    # 0.5 s lead-in; the 5.5-9.5 s pause and everything after 17.5 s are cut; the
+    # 0.5 s pause after u0002's clip is shorter than the threshold and is kept.
+    assert [(s.src_start, s.src_end) for s in segments] == [(1.5, 5.5), (9.5, 17.5)]
     assert e["u0001"].out_start == 0.5 and e["u0001"].src_end == 5.5
-    assert e["u0002"].out_start == 4.0 and e["u0002"].src_end == 13.0
+    assert e["u0002"].out_start == 4.5 and e["u0002"].src_end == 13.0
     assert e["u0002"].atempo == 1.0 and e["u0002"].video_stretch == 1.0
-    assert e["u0003"].out_start == 7.0 and e["u0003"].src_end == 17.5
-    assert segments[-1].out_end == pytest.approx(11.5)   # 20 s of source -> 11.5 s
+    assert e["u0003"].out_start == 7.5 and e["u0003"].src_end == 17.5
+    assert segments[-1].out_end == pytest.approx(12.0)   # 20 s of source -> 12 s
+
+
+def test_plan_compact_keeps_silences_shorter_than_the_threshold():
+    units = [U(1, 2.0, 5.0, 10.0), U(2, 10.0, 12.0, 13.0), U(3, 13.0, 14.0, 20.0)]
+    clips = {"u0001": 2.0, "u0002": 2.5, "u0003": 4.0}
+    cfg = FitConfig(timing="compact", compact_min_silence_s=4.0, compact_pad_before_s=0.5,
+                    compact_pad_after_s=0.5, max_atempo=1.0)
+    _, segments = plan_compact(units, clips, 20.0, cfg)
+    # Only the 5 s pause after u0001 is long enough; the 2 s lead-in and 3 s tail stay.
+    assert [(s.src_start, s.src_end) for s in segments] == [(0.0, 5.5), (9.5, 20.0)]
+    cfg.compact_min_silence_s = 6.0
+    _, segments = plan_compact(units, clips, 20.0, cfg)
+    assert [(s.src_start, s.src_end) for s in segments] == [(0.0, 20.0)]
 
 
 def test_plan_compact_stretches_when_the_next_group_is_too_close():
     units = [U(1, 0.0, 1.0, 1.2), U(2, 1.2, 2.0, 3.0)]
     entries, segments = plan_compact(units, {"u0001": 2.0, "u0002": 0.5}, 3.0,
-                                     FitConfig(timing="compact", compact_gap_s=0.2,
+                                     FitConfig(timing="compact", compact_pad_after_s=0.2,
                                                max_atempo=1.0))
     assert entries[0].video_stretch == pytest.approx(2.2 / 1.2, abs=1e-3)
     assert entries[1].out_start == pytest.approx(2.2)
@@ -176,10 +190,10 @@ def test_fit_and_assemble_end_to_end(demo_video, tmp_path, stretch, compact):
     out = ffmpeg.probe(ctx.path("clean.mp4"))
     assert out.has_video and out.has_audio
     if compact:
-        # Kept: 0.35 s lead-in, 0.5-2.85 s and 4.5-6.35 s; the rest is cut.
+        # Kept: the 0.5 s lead-in (too short to cut), 0-2.85 s and 4.3-6.35 s.
         assert timeline["timing"] == "compact"
-        assert timeline["output_duration"] == pytest.approx(4.55, abs=0.05)
-        assert out.duration == pytest.approx(4.55, abs=0.25)
+        assert timeline["output_duration"] == pytest.approx(4.9, abs=0.05)
+        assert out.duration == pytest.approx(4.9, abs=0.25)
     elif stretch:
         assert first["video_stretch"] > 1.0
         assert out.duration == pytest.approx(timeline["output_duration"], abs=0.25)

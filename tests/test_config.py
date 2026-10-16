@@ -43,3 +43,8 @@ def test_save_overrides_writes_only_differences(tmp_path: Path):
     out = tmp_path / CONFIG_NAME
     save_overrides(out, cfg, base)
     assert tomllib.loads(out.read_text()) == {"fit": {"timing": "compact"}}
+
+
+def test_old_compact_gap_becomes_pad_after(tmp_path: Path):
+    (tmp_path / CONFIG_NAME).write_text("[fit]\ncompact_gap_s = 0.5\n")
+    assert load_config(None, tmp_path).fit.compact_pad_after_s == 0.5

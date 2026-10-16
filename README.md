@@ -183,6 +183,10 @@ group_max_s = 25
 
 [fit]
 max_atempo = 1.15            # most a clip is sped up before the video is slowed
+# compact timing: silences at least this long are cut, keeping the padding around speech
+compact_min_silence_s = 1.0
+compact_pad_before_s = 0.2
+compact_pad_after_s = 0.35
 
 [qa]
 max_wer = 0.15
